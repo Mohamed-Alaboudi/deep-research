@@ -12,8 +12,10 @@
 - Sub-agents build focused analysis of their area
 
 ## Knowledge synthesis
-- Orchestrator synthesizes directly, no sub-agent dispatch
-- Optionally spawn 1-2 web lookups for fact-checking specific claims
+- Foundation comes from Opus's training data
+- **MUST spawn at least 1 fact-check analyst** with 2-3 web lookups to verify the top-3 claims before presenting
+- Claims that survive fact-check get `[^N]` citations like all other modes
+- Claims that fail fact-check or weren't verified must be removed or marked `[interpretation]`
 
 ## Mixed
 - Sub-agents may spawn BOTH web and codebase lookups

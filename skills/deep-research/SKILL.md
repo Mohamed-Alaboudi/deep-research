@@ -49,7 +49,7 @@ If the user explicitly says "just start" or similar, skip clarification and use 
 Parse the topic and detect mode:
 - Web: external information needed
 - Codebase: topic relates to a project in the working directory
-- Knowledge: can be answered from training data (skip to Step 4)
+- Knowledge: foundation comes from training data, but **MUST be fact-checked** — spawn 1 fact-check analyst with 2-3 web lookups verifying the top-3 claims before synthesis. No claim ships without a source.
 - Mixed: requires both web and codebase
 
 Break the topic into 2-4 sub-questions. Assign each a depth level:
@@ -116,7 +116,7 @@ If significant gaps remain, spawn 1-2 follow-up sub-agents. Maximum 2 follow-up 
 
 Synthesize findings across the files by theme, not by agent.
 
-Present in chat using the structure from `references/output-format.md`. The Sources section at the end must list the actual URLs from the analyst files. Since you read the files directly, these URLs are in your context.
+Present in chat using the structure from `references/output-format.md`. **Every Kernpunkt and every Finding-statement must end with a `[^N]` inline citation** pointing to the numbered Sources section. Build the Sources list from the actual URLs in the analyst files. If a statement cannot be tied to a source from the files, either remove it or mark it `[interpretation]` and explain why. No claim ships without either a citation or an `[interpretation]` tag.
 
 After presenting, ask: "Soll ich die Ergebnisse als Report speichern? (Datei wird unter ~/.claude/deep-research/ abgelegt)"
 
@@ -144,4 +144,10 @@ Read `references/error-handling.md` for failures, vague questions, and quality i
 
 ## Self-verification
 
-Before finishing, check: Does my response include a Sources section with URLs? Does it end with the METRICS comment? If either is missing, read the analyst files again and add the missing URLs.
+Before finishing, check three things:
+
+1. Does the response end with the METRICS comment?
+2. Does every Kernpunkt and every Finding-statement carry a `[^N]` citation or an `[interpretation]` tag?
+3. Does the Sources section contain a numbered entry for every `[^N]` used above?
+
+If any check fails, re-read the analyst files and fix the gaps before sending. A claim without a source is a bug, not an output.
