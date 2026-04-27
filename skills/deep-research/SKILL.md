@@ -78,79 +78,16 @@ Use this pattern for each sub-agent:
 Agent(
   subagent_type: "deep-research:dr-analyst",
   model: "sonnet",
-  prompt: "You research a question by spawning web and codebase lookup agents, evaluating their findings, and writing a summary to a file.
+  prompt: "Research the question below. Follow your agent instructions for lookup count, depth handling, file format, and return value.
 
 QUESTION: What pricing models do existing price elasticity tools use?
 MODE: web
 DEPTH: standard
-OUTPUT_FILE: /tmp/deep-research/analyst-1.md
-
-PROCESS:
-1. Break the question into 1-6 lookup tasks
-2. For each web task, spawn: Agent(subagent_type: 'deep-research:dr-scraper-web', model: 'sonnet', prompt: '<the full web-lookup prompt below>')
-3. For each codebase task, spawn: Agent(subagent_type: 'deep-research:dr-scraper-codebase', model: 'sonnet', prompt: '<the full codebase-lookup prompt below>')
-4. Spawn lookups in parallel when possible
-5. If results are thin (most returned fewer than 3 facts), spawn 1-2 more with rephrased queries
-6. Write your full findings to OUTPUT_FILE using the Write tool
-7. Return only: DONE|/tmp/deep-research/analyst-1.md
-
-WEB-LOOKUP PROMPT TEMPLATE (copy this, fill in the question):
-\"\"\"
-You collect facts with source URLs for ONE question from web sources. Do not evaluate or synthesize.
-
-QUESTION: [specific question]
-DEPTH: [shallow: 2 searches, 0 link-follows | standard: 3-4 searches, 1-2 link-follows | deep: 5-6 searches, up to 3 link-follows]
-
-Process: Run WebSearch with varied phrasing, WebFetch promising results, follow links per depth level. Prefer official docs > GitHub > recognized blogs > forums.
-
-Output format (follow this exactly):
-### Facts
-1. [finding] — [URL] (type: doc/blog/forum/github)
-2. [finding] — [URL] (type)
-
-### Issues
-- [only if sources were inaccessible]
-
-Every fact needs a URL. No URL, no fact. Maximum 600 words.
-\"\"\"
-
-CODEBASE-LOOKUP PROMPT TEMPLATE:
-\"\"\"
-You collect facts with file paths for ONE question from local code. Do not evaluate or synthesize.
-
-QUESTION: [specific question]
-
-Process: Use Glob to find files, Grep to search patterns, Read to examine contents.
-
-Output format (follow this exactly):
-### Facts
-1. [finding] — [file:line] (type: code)
-2. [finding] — [file:line] (type: code)
-
-### Issues
-- [only if files were missing]
-
-Every fact needs a file path. Maximum 600 words.
-\"\"\"
-
-FILE FORMAT (write this to OUTPUT_FILE):
-### Findings
-[Clustered by theme. Each finding includes its source URL or file path inline.]
-
-### Sources
-- [type] description — URL or file path
-- [type] description — URL or file path
-
-### Confidence
-- [Theme]: [high / medium / low]
-
-### Stats
-[N] lookups ([N] web, [N] codebase), [N] failed | Sources: [N] doc, [N] blog, [N] forum, [N] github, [N] code
-
-Maximum 1000 words. Cut lowest-confidence findings first.
-After writing the file, return ONLY: DONE|/tmp/deep-research/analyst-1.md"
+OUTPUT_FILE: /tmp/deep-research/analyst-1.md"
 )
 </example>
+
+The full process and output format live in the agent body (`agents/dr-analyst.md`) and in the scraper agent bodies (`agents/dr-scraper-web.md`, `agents/dr-scraper-codebase.md`). Do not duplicate them in the spawn prompt — the subagent_type loads them automatically.
 
 Before dispatching, create the output directory: `mkdir -p /tmp/deep-research`
 
