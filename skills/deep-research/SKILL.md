@@ -125,9 +125,22 @@ If yes, write to `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`.
 
 ### Step 5: Metrics
 
-End your final response with:
+End your final response with the METRICS comment so the stop hook can record the run.
 
-`<!-- METRICS:{"topic":"...","mode":"...","analysts":N,"scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL} -->`
+The new fields after `follow_up_needed` are for compliance tracking — they let us measure whether the depth corridor and citation rules are actually followed across many runs. Compute them from your own dispatch records and your final output:
+
+- `lookup_count_per_analyst`: list of `{depth, count}` — one entry per analyst you dispatched
+- `depth_corridor_violations`: integer count of analysts that broke the corridor (deep with <3 lookups, shallow with >2, standard outside 2-4)
+- `claims_with_citation`: integer count of factual statements ending with `[^N]` or `[interpretation]` in your final response
+- `claims_total`: integer count of factual statements in your final response (denominator for compliance)
+- `constraints_used`: boolean — did Step 0 produce a CONSTRAINTS block that was passed to analysts?
+- `knowledge_factcheck_done`: boolean — for `mode=knowledge`, did you spawn the fact-check analyst with web lookups? Use `null` for non-knowledge modes.
+
+Template:
+
+```
+<!-- METRICS:{"topic":"...","mode":"...","analysts":N,"scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"lookup_count_per_analyst":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL} -->
+```
 
 ## Context window protection
 
