@@ -19,7 +19,7 @@ if ! command -v python3 &>/dev/null; then
     exit 0
 fi
 
-# Parse JSON properly, extract metrics
+# Parse JSON properly, extract metrics. Skip empty objects ({}) — those add noise without information.
 metrics=$(printf '%s' "$input" | python3 -c "
 import sys, json, re
 try:
@@ -28,12 +28,13 @@ try:
     match = re.search(r'<!-- METRICS:(\{.*?\}) -->', msg, re.DOTALL)
     if match:
         parsed = json.loads(match.group(1))
-        print(json.dumps(parsed, ensure_ascii=False))
+        if isinstance(parsed, dict) and parsed:
+            print(json.dumps(parsed, ensure_ascii=False))
 except Exception:
     pass
 " 2>/dev/null)
 
-if [ -z "$metrics" ]; then
+if [ -z "$metrics" ] || [ "$metrics" = "{}" ]; then
     exit 0
 fi
 

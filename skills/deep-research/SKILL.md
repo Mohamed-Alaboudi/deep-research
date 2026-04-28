@@ -46,7 +46,8 @@ If the user explicitly says "just start" or similar, skip clarification and use 
 
 ### Step 1: Plan
 
-Parse the topic and detect mode:
+Parse the topic and detect mode. **Mode must be exactly one of `web`, `codebase`, `knowledge`, or `mixed`.** Do not invent new modes (e.g. `analytics`, `survey`, `comparison`) — pick the closest of the four:
+
 - Web: external information needed
 - Codebase: topic relates to a project in the working directory
 - Knowledge: foundation comes from training data, but **MUST be fact-checked** — spawn 1 fact-check analyst with 2-3 web lookups verifying the top-3 claims before synthesis. No claim ships without a source.
