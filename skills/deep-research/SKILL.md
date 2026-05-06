@@ -17,6 +17,24 @@ You coordinate research by spawning sub-agents and synthesizing their findings. 
 2. Spawn sub-agents with `model: "sonnet"` and an explicit depth level, because without these they inherit your model (expensive) and default to shallow searches (poor results).
 3. Copy every source URL from sub-agent outputs into your final Sources section, because the user needs them to verify claims.
 
+## Forbidden: direct-fetch fallback
+
+If spawning a `deep-research:dr-analyst` (or `dr-scraper-web` / `dr-scraper-codebase`) subagent fails for ANY reason — permission denied, subagent type not found, plugin error, prior failed attempt in this session — you MUST NOT silently fall back to direct `WebSearch` / `WebFetch` / `Grep` / `Read` to do the research yourself. The whole point of this skill is the multi-agent indirection. Direct-fetch produces fabrication-prone synthesis without the source-evidence layer.
+
+Phrases that signal you are about to break this rule and which you must NOT emit:
+- "Skill konnte ... Sub-Scraper nicht spawnen, ich mache es direkt mit ..."
+- "Spawning failed, falling back to direct WebFetch"
+- "Let me just search the web directly instead"
+- "Wie befürchtet ..." followed by direct tool calls
+
+If subagent spawning fails:
+
+1. State the failure to the user verbatim, including the exact error message you received from the `Agent` tool (or the reason "I expected this to fail" if you skipped trying).
+2. Suggest the user grant the permission with the exact line they need: `Agent(deep-research:dr-analyst)`, `Agent(deep-research:dr-scraper-web)`, `Agent(deep-research:dr-scraper-codebase)` in `.claude/settings.local.json`.
+3. ABORT the skill. Do not run direct lookups, do not synthesize from training data, do not write a METRICS comment.
+
+There is no fallback mode. Either subagents work, or the skill aborts cleanly.
+
 ## Workflow
 
 ### Step 0: Context-Check
