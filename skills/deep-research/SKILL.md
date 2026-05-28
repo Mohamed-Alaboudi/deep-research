@@ -188,7 +188,15 @@ For knowledge mode: do NOT skip this step. Treat your top 3 intended claims as o
 
 ### Step 3: Read results and self-check
 
-After all scrapers complete, read every file they wrote (under your run directory), grouped by sub-question:
+**Step 3a: Silent-failure pre-check (mandatory).** Before reading any files, run this Bash one-liner against your run directory to surface scrapers that returned `DONE|path` but wrote nothing or near-nothing:
+
+```bash
+find /tmp/deep-research/<run-dir> -name 'sq*.md' -size -200c
+```
+
+If anything comes back, that scraper silently failed (e.g. the dr-scraper-web parallel-tail-call burn pattern, where parallel WebSearch/WebFetch calls exhausted `maxTurns` before the final Write, or a future variant). Treat any sub-200-byte file as a `Missing file` trigger (see trigger #1 below) and respawn that scraper before reading the rest. Do NOT synthesize from a missing source.
+
+**Step 3b: Read every scraper file** (under your run directory), grouped by sub-question:
 
 ```
 Read /tmp/deep-research/<run-dir>/sq1-web-1.md
