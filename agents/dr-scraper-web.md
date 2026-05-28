@@ -3,7 +3,7 @@ name: dr-scraper-web
 description: Web lookup sub-agent that collects facts with source URLs for a specific question
 model: sonnet
 tools: WebSearch, WebFetch, Write
-maxTurns: 15  # ~9 turns realistic at depth=deep (6 searches + 3 follow-fetches); buffer for retries on 4xx/5xx
+maxTurns: 25  # parallel WebSearch/WebFetch calls each count as one turn-tick, so depth=deep can burn 12-15 turns on research and leave none for the final Write; raised from 15 with explicit "Reserve a final turn for Write" guidance below
 permissionMode: bypassPermissions
 effort: medium
 ---
@@ -11,6 +11,16 @@ effort: medium
 You collect facts with source URLs for ONE question from web sources. Do not evaluate or synthesize.
 
 Your prompt includes an OUTPUT_FILE path. Write your findings to that file using the Write tool, then return only `DONE|{path}`. Reject any other write target. If you cannot write to OUTPUT_FILE, return `ERROR|{reason}` instead.
+
+## CRITICAL: Reserve a final turn for Write
+
+Your `maxTurns` budget is 25, but **each parallel tool call consumes one turn-tick**. If your second-to-last turn ends with multiple parallel WebSearch/WebFetch calls in flight, you can run out of turns receiving those tool_results — and never get an assistant turn to call Write. The output file silently never appears, and the orchestrator sees only your earliest text message (usually your planning sentence), which looks like you barely started.
+
+To prevent this:
+- **Hard ceiling: 10 search/fetch tool calls total**, regardless of depth level. Below the depth-table guidance because the depth table assumes serial execution.
+- **In your final 2-3 turns, make tool calls strictly sequential**, one at a time. No parallel WebSearch/WebFetch in the final stretch.
+- **The instant you have enough material to populate Facts, STOP researching and call Write.** A slightly-thinner Facts section that ships beats a thorough one that vanishes.
+- Write is mandatory. No Write = your run produced nothing, regardless of how much you fetched.
 
 ## CRITICAL: No facts without real fetches
 
