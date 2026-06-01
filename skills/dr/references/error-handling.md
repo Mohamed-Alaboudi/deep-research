@@ -35,3 +35,13 @@ If the topic is too vague for meaningful sub-questions, ask the user to narrow d
 ## Scraper quality issues
 
 If a scraper returns off-topic, low-quality, or fabrication-smelling results, discard the file and dispatch a replacement scraper with a rephrased query. Maximum 2 follow-up rounds per sub-question — after that, mark the gap in the final output instead of papering over it. The five hard triggers in `SKILL.md` Step 3 enumerate which symptoms count.
+
+## Verifier failures
+
+If a `dr-verifier` subagent returns `ERROR|...` or fails to spawn:
+- Do NOT verify the claim yourself with direct WebSearch/WebFetch.
+- Do NOT substitute another agent type.
+- Mark the claim `unverifiziert` under the report's Verifikation section and keep it with
+  `medium` confidence.
+- One retry per claim is allowed (re-spawn the same verifier once). After that, mark it
+  unverified and move on. Verifier failures never block synthesis.
