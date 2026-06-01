@@ -63,6 +63,40 @@ After the user answers, distill the responses into a `CONSTRAINTS:` block (1-2 l
 
 If the user explicitly says "just start" or similar, skip clarification and use sensible defaults. Leave CONSTRAINTS empty or omit it. Continue to Step 1. Do not re-ask.
 
+### Step 0.5: Flags and tier
+
+Parse these optional flags from the topic string (strip them out before treating the rest
+as the topic):
+
+| Flag | Effect |
+|------|--------|
+| `--mode web\|codebase\|knowledge\|mixed` | Force research mode (as before) |
+| `--tier lite\|standard\|thorough` | Cost/verify tier. Default resolution order below |
+| `--verify3` | 3 verifier voters per claim instead of 1 (only at `standard`/`thorough`) |
+| `--no-verify` | Skip the verify stage entirely (v2.3.0 behavior) |
+| `--yes` / `--no-confirm` | Skip the approval gate (as before) |
+
+Tier default resolution: if `--tier` is given, use it. Otherwise read
+`~/.claude/deep-research/config.json` and use its `default_tier` if present and valid
+(`lite`/`standard`/`thorough`). Otherwise default to `lite`.
+
+```bash
+# tier default lookup (run once, before planning)
+cat ~/.claude/deep-research/config.json 2>/dev/null
+```
+
+Tier parameters:
+
+| Tier | Verify central-claims cap | Voters (default) | Hard subagent cap |
+|------|---------------------------|------------------|-------------------|
+| lite | 8 | 1 | 25 |
+| standard | 10 | 1 (3 with `--verify3`) | 35 |
+| thorough | 12 | 3 | 55 |
+
+`--verify3` at `lite` is ignored with a one-line note ("verify3 wirkt erst ab tier
+standard, ignoriert"). The hard subagent cap is absolute — no flag raises it above the
+tier value.
+
 ### Step 1: Plan
 
 Parse the topic and detect mode. **Mode must be exactly one of `web`, `codebase`, `knowledge`, or `mixed`.** Do not invent new modes (e.g. `analytics`, `survey`, `comparison`) — pick the closest of the four:
