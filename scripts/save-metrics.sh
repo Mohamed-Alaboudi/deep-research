@@ -20,6 +20,7 @@ if ! command -v python3 &>/dev/null; then
 fi
 
 # Parse JSON properly, extract metrics. Skip empty objects ({}) — those add noise without information.
+# Stores the full METRICS dict verbatim; v3 verify fields (verify_tier, claims_verified, …) ride along automatically.
 metrics=$(printf '%s' "$input" | python3 -c "
 import sys, json, re
 try:

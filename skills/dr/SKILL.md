@@ -361,10 +361,21 @@ The new fields after `follow_up_needed` are for compliance tracking — they let
 - `knowledge_factcheck_done`: boolean — for `mode=knowledge`, did you spawn verification scrapers with web lookups? Use `null` for non-knowledge modes.
 - `approval_gate_action`: one of `"skipped"` (skip-condition matched), `"approved"` (user picked "Ja, loslegen"), `"adjusted"` (user went through one or more "Anpassen" rounds before approving), or `"cancelled"` (user picked "Abbrechen" — in that case you should not be emitting METRICS at all, this value exists only to make the schema complete).
 
+Verify-stage fields (v3):
+
+- `verify_tier`: `"lite" | "standard" | "thorough"`
+- `verify_voters`: 1 or 3
+- `claims_verified`: int — central claims sent to Step 5
+- `claims_confirmed`: int
+- `claims_uncertain`: int
+- `claims_contradicted`: int
+- `total_subagents`: int — scrapers + verifiers actually spawned
+- `hard_cap_hit`: bool — true if the run was trimmed to fit the tier hard cap
+
 Template:
 
 ```
-<!-- METRICS:{"topic":"...","mode":"...","scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"scraper_count_per_subquestion":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL,"approval_gate_action":"approved"} -->
+<!-- METRICS:{"topic":"...","mode":"...","scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"scraper_count_per_subquestion":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL,"approval_gate_action":"approved","verify_tier":"lite","verify_voters":1,"claims_verified":N,"claims_confirmed":N,"claims_uncertain":N,"claims_contradicted":N,"total_subagents":N,"hard_cap_hit":false} -->
 ```
 
 ## Context window protection
