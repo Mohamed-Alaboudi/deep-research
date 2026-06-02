@@ -11,4 +11,5 @@
 .claude/solutions/
 CLAUDE.md
 docs/
+INVESTIGATION-*.md
 .claude-plugin/local-state.json
