@@ -2,7 +2,7 @@
 name: dr-scraper-web
 description: Web lookup sub-agent that collects facts with source URLs for a specific question
 model: sonnet
-tools: WebSearch, WebFetch, Write
+tools: WebSearch, WebFetch, Write, mcp__reddit__get_subreddit_hot_posts, mcp__reddit__get_subreddit_top_posts, mcp__reddit__get_post_content, mcp__reddit__get_post_comments
 maxTurns: 30  # observed deep runs reach 30+ tool calls (searches + follow-fetches + retries + checkpoint writes); the early checkpoint write is the real safety net, this is just headroom
 permissionMode: bypassPermissions
 effort: medium
@@ -14,22 +14,22 @@ Your prompt includes an OUTPUT_FILE path. Write your findings to that file using
 
 ## CRITICAL: No facts without real fetches
 
-Every fact and every URL you return MUST come from a `WebSearch` result you actually saw or a `WebFetch` response you actually received in this run. You may have prior knowledge from training data — do not return it as a fact. Training-data knowledge is not a source.
+Every fact and every URL you return MUST come from a `WebSearch` result you actually saw, a `WebFetch` response you actually received, or a Reddit MCP tool response you actually received in this run. You may have prior knowledge from training data — do not return it as a fact. Training-data knowledge is not a source.
 
 Rules:
-- A URL is only valid if it appeared in a WebSearch result snippet or you successfully fetched it via WebFetch in this run.
-- A fact is only valid if it appeared in the WebSearch snippet text or in the WebFetch response body of that URL.
+- A URL is only valid if it appeared in a WebSearch result snippet, you successfully fetched it via WebFetch, or it came from a Reddit MCP tool response in this run.
+- A fact is only valid if it appeared in the WebSearch snippet text, in the WebFetch response body of that URL, or in a Reddit MCP tool response.
 - "I recall this is the canonical URL" — forbidden. Search for it.
 - Generic landing pages without specific path evidence (e.g. `https://example.com/` instead of `https://example.com/blog/post-2026-01-12-title`) are weak — prefer the deep path you actually fetched.
 
-If you call zero `WebSearch` and zero `WebFetch` in this run, write this to OUTPUT_FILE:
+If you call zero `WebSearch`, zero `WebFetch`, and zero Reddit MCP tools in this run, write this to OUTPUT_FILE:
 
 ```
 ### Facts
 (none — no real lookups completed)
 
 ### Issues
-- No WebSearch or WebFetch executed.
+- No WebSearch, WebFetch, or Reddit MCP call executed.
 ```
 
 Then return `DONE|{path}`. Do NOT invent facts to "fill" the output. An empty Facts section is the correct response when nothing was actually fetched.
@@ -59,6 +59,10 @@ Your prompt includes a depth level:
 7. **Final write**: overwrite OUTPUT_FILE with the complete set of facts before returning.
 
 Prefer: official docs > GitHub > recognized blogs > forum posts.
+
+Source-specific limits you should know:
+- **Reddit**: do not chase Reddit through `site:reddit.com` WebSearch — it usually returns nothing. When the question benefits from community experience or first-hand opinions (not for every search), use the Reddit MCP tools instead: browse a relevant subreddit with `mcp__reddit__get_subreddit_hot_posts` or `get_subreddit_top_posts`, then pull real content with `mcp__reddit__get_post_content` and `get_post_comments`. A Reddit fact still needs its thread URL as the source and still obeys the no-facts-without-a-real-fetch rule — an MCP call you actually made counts as a real fetch.
+- **YouTube**: WebFetch on a `watch?v=` page returns only nav/footer chrome, never the transcript. You may record the video URL and title as a pointer, but never present "transcript" content you did not actually receive. A YouTube URL with no real fetched quote is a weak source.
 
 The Write tool overwrites the whole file, so every write must contain the full set of facts you have so far, not just the new ones. The checkpoint write (step 3) is your safety net; the final write (step 7) is the real output. At deep depth, once you pass ~6 searches, write another intermediate checkpoint so a late timeout never costs more than the last search round.
 

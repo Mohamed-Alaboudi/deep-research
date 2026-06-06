@@ -252,6 +252,8 @@ Apply these **hard triggers** per sub-question (aggregate across all scraper fil
 
 Skip Step 3 entirely if no trigger fires. Continue to Step 4.
 
+**Recovery strategy — resume before respawn.** When a trigger fires because a scraper stalled (hit its turn limit and returned narration instead of `DONE|path`, or wrote only a thin checkpoint file), prefer resuming that same agent via `SendMessage` to its agent ID before spawning a fresh one. A stalled scraper still holds its real fetches in context, so a resume usually produces the missing facts far cheaper than a respawn that repeats every search. Fall back to a fresh follow-up scraper only when the stalled agent has no reachable ID or the resume itself fails. Either path counts toward the 2-round limit below.
+
 Maximum 2 follow-up rounds total per sub-question. If a sub-question still triggers after both rounds, mark it under **Contradictions & Open Questions** in the final output instead of papering over the gap with `[interpretation]`.
 
 ### Step 4: Extract candidate claims
