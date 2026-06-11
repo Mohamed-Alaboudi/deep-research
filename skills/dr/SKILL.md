@@ -27,11 +27,11 @@ If spawning a `deep-research:dr-scraper-web`, `deep-research:dr-scraper-codebase
 The whole point of this skill is the multi-agent indirection through agents that enforce fact-from-source rules. Direct-fetch and substitute-agents both produce fabrication-prone synthesis without those rules.
 
 Phrases that signal you are about to break this rule and which you must NOT emit:
-- "Skill konnte ... Sub-Scraper nicht spawnen, ich mache es direkt mit ..."
+- "Skill couldn't spawn the sub-scraper, I'll just do it directly with ..."
 - "Spawning failed, falling back to direct WebFetch"
 - "Let me just search the web directly instead"
-- "Wie befürchtet ..." followed by direct tool calls
-- "Wechsle auf general-purpose-Agenten mit direktem WebSearch/WebFetch-Zugang"
+- "As feared ..." followed by direct tool calls
+- "Switching to general-purpose agents with direct WebSearch/WebFetch access"
 - "Switch to general-purpose agents to get web access"
 
 There is no fallback mode. Either scrapers work, or the skill aborts cleanly. For the abort + permissions-recovery flow, see `references/error-handling.md`.
@@ -56,8 +56,8 @@ If clarification is needed, ask at most **3 targeted questions** via `AskUserQue
 
 Examples of questions that change the plan:
 - "Welcher Stack-Kontext?" → steers codebase vs. web mode and keyword choice
-- "Entscheidung oder Überblick?" → steers depth allocation (1 deep vs. 3 standard)
-- "Zeitraum der Quellen?" → steers whether to prioritize recent blog posts vs. established docs
+- "Decision or overview?" → steers depth allocation (1 deep vs. 3 standard)
+- "Time range of sources?" → steers whether to prioritize recent blog posts vs. established docs
 
 After the user answers, distill the responses into a `CONSTRAINTS:` block (1-2 lines max — stack/version, decision context, source preferences, time-frame, anything that materially shapes lookups). **Keep the original topic unchanged.** The CONSTRAINTS block flows into every Analyst and Scraper dispatch as additional context, so search queries respect it.
 
@@ -72,7 +72,7 @@ as the topic):
 |------|--------|
 | `--mode web\|codebase\|knowledge\|mixed` | Force research mode (as before) |
 | `--tier lite\|standard\|thorough` | Cost/verify tier. Default resolution order below |
-| `--verify3` | 3 verifier voters per claim instead of 1 (only at `standard`/`thorough`) |
+| `--verify3` | **Deprecated.** Verification now uses an escalation ladder (Step 5), not a flat voter count. Accepted but ignored with a one-line note. |
 | `--no-verify` | Skip the verify stage entirely (v2.3.0 behavior) |
 | `--yes` / `--no-confirm` | Skip the approval gate (as before) |
 
@@ -87,15 +87,18 @@ cat ~/.claude/deep-research/config.json 2>/dev/null
 
 Tier parameters:
 
-| Tier | Verify central-claims cap | Voters (default) | Hard subagent cap |
-|------|---------------------------|------------------|-------------------|
-| lite | 8 | 1 | 25 |
-| standard | 10 | 1 (3 with `--verify3`) | 35 |
-| thorough | 12 | 3 | 55 |
+| Tier | Verify central-claims cap | Verification | Hard subagent cap |
+|------|---------------------------|--------------|-------------------|
+| lite | 8 | escalation ladder (Step 5) | 25 |
+| standard | 10 | escalation ladder (Step 5) | 35 |
+| thorough | 12 | escalation ladder (Step 5) | 55 |
 
-`--verify3` at `lite` is ignored with a one-line note ("verify3 wirkt erst ab tier
-standard, ignoriert"). The hard subagent cap is absolute — no flag raises it above the
-tier value.
+Voter count is no longer a flat per-tier setting. Every claim starts at 1 voter; important
+claims get a 2nd; a useful contradiction escalates a 3rd; an unresolved contradiction
+throws the claim out. See Step 5. The tier now controls only the claim cap and the hard
+subagent cap. `--verify3` is deprecated (the ladder supersedes it); if passed, ignore it
+with a one-line note ("verify3 ist veraltet — die Eskalationsleiter ersetzt feste Voter,
+ignoriert"). The hard subagent cap is absolute — no flag raises it above the tier value.
 
 ### Step 1: Plan
 
@@ -124,26 +127,26 @@ Forschungsplan: "[Topic]"
 Modus: [Web / Codebase / Knowledge / Mixed]
 
 1. [Sub-question] (deep) — N scrapers
-   Warum deep: [core decision driver / multiple competing answers / etc.]
+   Why deep: [core decision driver / multiple competing answers / etc.]
    Angles: [angle 1] · [angle 2] · [angle 3]
 2. [Sub-question] (standard) — N scrapers
-   Warum standard: [regular sub-question, established sources expected]
+   Why standard: [regular sub-question, established sources expected]
    Angles: [angle 1] · [angle 2]
 3. [Sub-question] (shallow) — N scrapers
-   Warum shallow: [peripheral fact-check / known terrain]
+   Why shallow: [peripheral fact-check / known terrain]
    Angles: [angle 1]
 
-Dispatch-Budget: N scrapers total (Sweet-Spot ~12, Ceiling ~15)
+Dispatch budget: N scrapers total (Sweet-Spot ~12, Ceiling ~15)
 ```
 
 For `mode: knowledge`, the plan has exactly one synthetic sub-question — frame it as the verification of the top-3 claims you intend to make:
 
 ```
-1. Verifikation der 3 Kernaussagen (standard) — 2 scrapers
-   Warum standard: knowledge-mode-Pflicht-Faktencheck, nicht überspringbar
-   Angles: Aussage 1 (X) · Aussage 2 (Y) · Aussage 3 (Z)
+1. Verification of the 3 core claims (standard) — 2 scrapers
+   Why standard: knowledge-mode mandatory fact-check, not skippable
+   Angles: Claim 1 (X) · Claim 2 (Y) · Claim 3 (Z)
 
-Dispatch-Budget: 2 scrapers total
+Dispatch budget: 2 scrapers total
 ```
 
 Keep the rationale and angles short — the user wants to scan, not read prose. One line each is enough.
@@ -165,7 +168,7 @@ Otherwise, ask via `AskUserQuestion`:
 
 If the user picks "Anpassen":
 1. If they spelled out what to change in their answer notes, apply that change.
-2. If they only picked "Anpassen" without detail, ask **one** targeted follow-up: "Was soll geändert werden? (Sub-Frage, depth, Scraper-Anzahl, mode, oder einzelne Angles)" — do NOT re-present the unchanged plan, that wastes a turn.
+2. If they only picked "Anpassen" without detail, ask **one** targeted follow-up: "What should change? (sub-question, depth, scraper count, mode, or individual angles)" — do NOT re-present the unchanged plan, that wastes a turn.
 3. Update the plan, re-present it (with the same dispatch-budget breakdown), ask the gate again.
 
 Repeat up to 5 adjustment rounds. If the user is still adjusting after the 5th, suggest aborting and re-invoking with a clearer topic. Don't enforce a hard stop — the loop limit is a soft hint that something deeper is unclear.
@@ -192,8 +195,10 @@ The floor for `deep` is hard. The ceilings are soft — exceed them only if the 
 Reason: beyond ~10 parallel subagents, each additional one delivers diminishing marginal coverage while linearly increasing token cost and timeout risk.
 
 **Hard subagent cap (tier-dependent).** Before dispatching, compute the planned total:
-`scrapers + planned verifiers`. The planned verifier count is the number of `central`
-claims you expect to verify (capped at the tier's verify cap) times the voter count. If
+`scrapers + planned verifiers`. With the escalation ladder (Step 5), estimate the planned
+verifier count as `central_claims + important_claims + expected_escalations` — i.e. 1 per
+central claim, +1 for each you expect to mark important, +1 for each you expect to escalate
+on a contradiction. A safe upper bound is `central_claims × 2`; use that if unsure. If
 `scrapers + planned_verifiers` exceeds the tier hard cap (lite 25 / standard 35 /
 thorough 55), trim in this order until it fits: (1) reduce verify claims (drop
 lowest-centrality / weakest-source first), (2) only then reduce scraper count. Record
@@ -277,19 +282,46 @@ the mode is `codebase` (codebase claims are not web-verifiable; they keep `mediu
 confidence). In `mixed` mode, only `central` claims whose source is a URL (not a file
 path) are eligible.
 
-### Step 5: Verify central claims (capped)
+### Step 5: Verify central claims (escalation ladder)
 
 Select the eligible `central` claims, capped at the tier's verify cap (lite 8, standard
 10, thorough 12). If there are more eligible central claims than the cap, keep the ones
 with the strongest centrality and best source type; list the dropped ones under the
-report's Verifikation section as "nicht verifiziert (Cap)".
+report's Verification section as "not verified (cap)".
 
-For each selected claim, spawn `voters` `dr-verifier` subagents (voters = 1 for lite, or
-3 for thorough / `standard --verify3`). Respect the hard cap from Step 2 — if
-`scrapers + claims*voters` would exceed it, reduce the claim count first.
+**Verification is an escalation ladder, not a flat voter count.** Spend the cheapest
+amount of verification each claim actually needs, and escalate only when a result is both
+contested and worth resolving:
+
+1. **Round 1 — 1 voter (always).** Spawn exactly ONE `dr-verifier` for every selected
+   central claim. This is the minimum; most claims stop here.
+2. **Round 2 — 2nd voter for important claims.** A claim is *important* if it is a top
+   decision-driver for the research question (the strongest-centrality claims, the ones
+   the user's conclusion hinges on). For each important claim, spawn a 2nd `dr-verifier`.
+   Ordinary central claims stay at 1 voter.
+3. **Round 3 — escalate a useful contradiction.** If any voter returns `contradicted` for
+   a claim **and the claim is useful** (it materially affects the answer — not a
+   tangential aside), spawn a 3rd `dr-verifier` with the contradiction noted in its prompt
+   so it digs deeper than the one-search baseline.
+4. **Resolve or throw out.** After the 3rd look:
+   - If the deeper verifier confirms (or the contradiction was spurious) → the claim
+     survives with the resulting confidence.
+   - If it **still cannot be resolved** (the 3rd voter is `contradicted` or `uncertain`
+     against the claim) → **throw the claim out.** Drop it from the main findings and list
+     it under the report's Verification section as "removed — unresolved contradiction"
+     with the counter-source.
+
+Run rounds in waves: launch Round 1 in parallel; once you've read the verdicts, launch the
+Round-2/Round-3 escalations the verdicts triggered, in parallel. A claim with no
+contradiction and that is not "important" costs exactly 1 verifier.
+
+Respect the hard cap from Step 2 — count the planned verifiers as
+`central_claims + important_claims + expected_escalations`. If it would exceed the cap,
+reduce the claim count first (drop lowest-centrality), not the escalation logic — the
+ladder is what makes verification trustworthy.
 
 Write verifier outputs into the same per-run directory used for scrapers, named
-`<run-dir>/verify-{claimIndex}-{voterIndex}.md`.
+`<run-dir>/verify-{claimIndex}-{voterIndex}.md` (voterIndex 1, 2, 3 across the rounds).
 
 Spawn pattern per voter:
 
@@ -311,28 +343,58 @@ OUTPUT_FILE: /tmp/deep-research/<run-dir>/verify-1-1.md"
 Launch all verifiers in parallel. Each returns only `DONE|{path}`; read the verdict files
 afterward.
 
-**Aggregation.** For a single voter, the verdict is that voter's verdict. For 3 voters,
-take the majority: `contradicted` only if ≥2 voters say `contradicted`; otherwise the
-finding survives with the majority of `confirmed`/`uncertain`. Map to confidence:
+**Aggregation (matches the ladder).**
+- **Stopped at 1 voter** (ordinary central claim, no contradiction): that voter's verdict
+  stands.
+- **2 voters** (important claim, both agree): combined verdict is the agreement.
+- **Escalated to a 3rd** (a useful claim was contradicted): the 3rd, deeper verifier
+  decides. If it confirms → the claim survives. If it stays `contradicted`/`uncertain` →
+  **throw the claim out** (Step 5, point 4).
+
+Map the surviving verdict to confidence:
 - all/most `confirmed` + primary source → `high`
-- `confirmed` with secondary source, or split votes → `medium`
+- `confirmed` with secondary source, or a survived-after-escalation claim → `medium`
 - `uncertain`, or single weak source → `low`
 
-`contradicted` claims are removed from the main findings and listed under the report's
-Verifikation section with their counter-source.
+Thrown-out claims are removed from the main findings and listed under the report's
+Verification section as "removed — unresolved contradiction" with their counter-source.
 
 **Same no-fallback rule as scrapers.** If spawning `dr-verifier` fails for any reason, you
 MUST NOT verify claims yourself with direct WebSearch/WebFetch, and MUST NOT substitute
 another agent type. Either the verifier works, or you skip verification for that claim and
-mark it `unverifiziert` in the Verifikation section. See `references/error-handling.md`.
+mark it `unverified` in the Verification section. See `references/error-handling.md`.
 
 ### Step 6: Synthesize and present
 
 Synthesize findings across the scraper files by theme, not by sub-question and not by scraper.
 
+**Step 5.9 — Playwright link gate (before presenting).** Every URL you are about to put in
+the Sources section must be opened in the Playwright browser MCP and confirmed to actually
+load and show real content — not a 404, paywall wall, login redirect, parking page, or
+empty shell. Do this for the *final* Sources list only (the URLs that survived into the
+report), so the cost scales with citations, not raw fetches.
+
+For each Sources URL:
+1. `mcp__playwright__browser_navigate` to the URL.
+2. `mcp__playwright__browser_snapshot` (or a screenshot) to confirm the page rendered real,
+   on-topic content — the thing the citation claims is there is visibly present.
+3. Classify:
+   - **Loads + shows the cited content** → keep the source as-is.
+   - **Loads but the cited content isn't visibly there** (page changed, anchor moved) →
+     keep the source but append `[link: content not located]` to that Sources entry, and
+     downgrade any claim that depended solely on it to `low` confidence.
+   - **Dead / 404 / blocked / parking page** → mark the Sources entry `[link: dead]`. If a
+     claim depended solely on that URL, move it to the Verification section as "source
+     unreachable at publish time" rather than presenting it as cited fact.
+
+If the Playwright MCP is unavailable or every navigation errors out, do not silently skip:
+present the report but add a one-line note under Sources — "Playwright link-check could not
+run; links unverified" — so the user knows the gate didn't execute. This is the only
+allowed degradation; never fabricate a "verified" status.
+
 Present in chat using the structure from `references/output-format.md`. **Every Kernpunkt and every Finding-statement must end with a `[^N]` inline citation** pointing to the numbered Sources section. Build the Sources list from the actual URLs in the scraper files. If a statement cannot be tied to a source from the files, either remove it or mark it `[interpretation]` and explain why. No claim ships without either a citation or an `[interpretation]` tag.
 
-After presenting, ask: "Soll ich die Ergebnisse als Report speichern? (Datei wird unter ~/.claude/deep-research/ abgelegt)"
+After presenting, ask: "Should I save the results as a report? (file will be stored under ~/.claude/deep-research/)"
 
 If yes, write to `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md` following these rules:
 
@@ -367,18 +429,24 @@ The new fields after `follow_up_needed` are for compliance tracking — they let
 Verify-stage fields (v3):
 
 - `verify_tier`: `"lite" | "standard" | "thorough"`
-- `verify_voters`: 1 or 3
-- `claims_verified`: int — central claims sent to Step 5
+- `verify_voters`: `"ladder"` — verification uses the Step 5 escalation ladder, not a
+  fixed voter count (kept in the schema for back-compat; always `"ladder"` now)
+- `claims_verified`: int — central claims sent to Step 5 (Round 1 count)
+- `claims_escalated_2`: int — claims that got a 2nd voter (important claims)
+- `claims_escalated_3`: int — claims that triggered a 3rd voter (useful contradiction)
+- `claims_thrown_out`: int — claims removed after an unresolved contradiction
 - `claims_confirmed`: int
 - `claims_uncertain`: int
-- `claims_contradicted`: int
+- `claims_contradicted`: int — voters that returned contradicted across all rounds
+- `links_checked`: int — Sources URLs opened in Playwright (Step 5.9)
+- `links_dead`: int — Sources URLs found dead/blocked by the Playwright gate
 - `total_subagents`: int — scrapers + verifiers actually spawned
 - `hard_cap_hit`: bool — true if the run was trimmed to fit the tier hard cap
 
 Template:
 
 ```
-<!-- METRICS:{"run_id":"<epoch-seconds>","topic":"...","mode":"...","scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"scraper_count_per_subquestion":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL,"approval_gate_action":"approved","verify_tier":"lite","verify_voters":1,"claims_verified":N,"claims_confirmed":N,"claims_uncertain":N,"claims_contradicted":N,"total_subagents":N,"hard_cap_hit":false} -->
+<!-- METRICS:{"run_id":"<epoch-seconds>","topic":"...","mode":"...","scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"scraper_count_per_subquestion":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL,"approval_gate_action":"approved","verify_tier":"lite","verify_voters":"ladder","claims_verified":N,"claims_escalated_2":N,"claims_escalated_3":N,"claims_thrown_out":N,"claims_confirmed":N,"claims_uncertain":N,"claims_contradicted":N,"links_checked":N,"links_dead":N,"total_subagents":N,"hard_cap_hit":false} -->
 ```
 
 ## Context window protection
@@ -388,7 +456,7 @@ Template:
 | Scraper return values | DONE|path only | ~100 words |
 | File reads | 600 words x ~12 files max | ~7,200 words |
 | Verifier return values | DONE|path only | ~100 words |
-| Verifier file reads | ~120 words x ≤24 files | ~2,900 words |
+| Verifier file reads | ~120 words x ≤~24 files (ladder: ~1-2 verifiers/claim, rarely 3) | ~2,900 words |
 
 Scrapers return only `DONE|{path}`. The orchestrator reads files on demand. Each scraper file is capped at ~600 words; for a typical 4-sub-question / 3-scraper-each run that's ~12 files.
 
@@ -398,11 +466,12 @@ Read `references/error-handling.md` for failures, vague questions, and quality i
 
 ## Self-verification
 
-Before finishing, check three things:
+Before finishing, check these:
 
 1. Does the response end with the METRICS comment?
 2. Does every Kernpunkt and every Finding-statement carry a `[^N]` citation or an `[interpretation]` tag?
 3. Does the Sources section contain a numbered entry for every `[^N]` used above?
-4. If the verify stage ran: does every `central` claim either carry a confidence marker from a verifier verdict, or appear in the Verifikation section as unverified? A central claim with no verdict and no Verifikation entry is a bug.
+4. If the verify stage ran: does every `central` claim either carry a confidence marker from a verifier verdict, appear in the Verification section as unverified, or appear there as "removed — unresolved contradiction"? A central claim with no verdict and no Verification entry is a bug.
+5. Did the Playwright link gate (Step 5.9) run over every Sources URL — each either kept after rendering real content, tagged `[link: dead]` / `[link: content not located]`, or covered by the "Playwright link-check could not run" note? A Sources URL that was never opened in the browser is a bug.
 
 If any check fails, re-read the scraper files and fix the gaps before sending. A claim without a source is a bug, not an output.
