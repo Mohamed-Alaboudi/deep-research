@@ -18,7 +18,7 @@ If `Agent(deep-research:dr-scraper-web)` or `Agent(deep-research:dr-scraper-code
    "Agent(deep-research:dr-scraper-codebase)"
    ```
 
-3. Offer to write the change yourself: ask "Soll ich die Permissions in `{cwd}/.claude/settings.local.json` ergaenzen?" If yes, read the file (or create it), merge the two `Agent(...)` entries into the existing `permissions.allow` array without removing other entries, and write it back. Ask the user to re-run the skill — settings reload requires a fresh tool-permission check.
+3. Offer to write the change yourself: ask "Should I add the permissions to `{cwd}/.claude/settings.local.json`?" If yes, read the file (or create it), merge the two `Agent(...)` entries into the existing `permissions.allow` array without removing other entries, and write it back. Ask the user to re-run the skill — settings reload requires a fresh tool-permission check.
 4. ABORT the skill. Do not run direct lookups, do not synthesize from training data, do not write a METRICS comment.
 
 The plugin's `PreToolUse` hook normally auto-approves these spawns. Permission errors usually mean the hook is disabled, the plugin is installed in a non-standard path, or the user explicitly denied the spawn.
@@ -39,9 +39,13 @@ If a scraper returns off-topic, low-quality, or fabrication-smelling results, di
 ## Verifier failures
 
 If a `dr-verifier` subagent returns `ERROR|...` or fails to spawn:
-- Do NOT verify the claim yourself with direct WebSearch/WebFetch.
+- Do NOT verify the claims yourself with direct WebSearch/WebFetch.
 - Do NOT substitute another agent type.
-- Mark the claim `unverifiziert` under the report's Verifikation section and keep it with
-  `medium` confidence.
-- One retry per claim is allowed (re-spawn the same verifier once). After that, mark it
-  unverified and move on. Verifier failures never block synthesis.
+- One retry per batch is allowed (re-spawn the same verifier once). After that, mark the batch's claims `unverified` under the report's Verification section and keep them with `medium` confidence.
+- Verifier failures never block synthesis. They are NOT a reason to skip verification for other batches — `verify_skipped_reason` stays `null` if Round 1 was attempted.
+
+## Link-gate failures
+
+- Single URL times out or errors in the curl sweep → one GET retry (SKILL.md Step 6a), then classify dead.
+- curl itself unavailable or every check errors → present the report with the one-line note "Link check could not run; links unverified" under Sources. Never report links as checked when they were not.
+- Playwright MCP unavailable → skip the spot-render layer (6b) only; the curl sweep still runs. Note "spot-render unavailable" under Sources.

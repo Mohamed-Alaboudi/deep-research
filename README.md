@@ -1,38 +1,33 @@
-# Deep Research
+# Deep Research (cortex-dr fork)
 
-A modular [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin for deep research across web, codebase, and knowledge domains. Uses Sonnet for sub-agents and lookups, Opus for orchestration and synthesis.
+A modular [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin for deep research across web, codebase, and knowledge domains. Uses Sonnet for sub-agents and lookups; the orchestrator runs on the session model.
+
+Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research). Tracks upstream; diverges with Exa-first scrapers, a batch verifier, a mandatory verification stage, and a curl link gate.
 
 ## Features
 
 - Multi-mode research: web, codebase, knowledge synthesis, or mixed
-- Auto-scaling: 2-4 sub-agents based on topic complexity
-- Depth-per-question: orchestrator assigns shallow/standard/deep per sub-question
-- Iterative lookups: web lookups follow promising links, sub-agents retry with rephrased queries
-- Source verification: every finding must link to a URL or file path
-- Dual-channel instructions: agent system prompts (body) and orchestrator prompt parameter reinforce the same output format
-- Metrics tracking: every run appends to ~/.claude/deep-research/metrics.jsonl
-- Optional report export: save research as markdown file on request
+- Tiered cost control: `lite` (default) / `standard` / `thorough`, plus `--fast` for explicit speed runs
+- Depth-per-question: orchestrator assigns shallow/standard/deep per sub-question, corridor depends on tier
+- Exa-first scrapers: Exa MCP for discovery/reading, WebSearch/WebFetch fallback, Reddit MCP for community sources
+- **Mandatory verification**: central claims go through a batched escalation ladder (~10 claims per `dr-verifier` agent, contested/important claims get a 2nd/3rd batched re-check, unresolved contradictions are thrown out). Skippable only via explicit flag (`--fast` / `--no-verify`) or user instruction — never by in-run judgment
+- **Link gate**: one curl sweep over every Sources URL (HEAD, GET retry), plus up to 5 Playwright spot-renders of load-bearing citations
+- Source discipline: every finding must carry a URL or file path; fabrication-smell triggers discard memory-dump scraper output
+- Metrics: every run appends a flat, schema-versioned record to `~/.claude/deep-research/metrics.jsonl`; the Stop hook normalizes drifted records
+- Optional report export to `~/.claude/deep-research/`
 
 ## Installation
 
-### Via marketplace
-
 ```bash
-claude plugin marketplace add phyr97/phyr97-marketplace
-claude plugin install deep-research@phyr97
+claude plugin marketplace add Mohamed-Alaboudi/deep-research
+claude plugin install deep-research@cortex-dr
 ```
 
-### Manual (for development)
+Manual (development): `claude --plugin-dir /path/to/deep-research`
 
-```bash
-claude --plugin-dir /path/to/deep-research
-```
+### Agent permissions
 
-### Recommended: agent permissions
-
-The plugin includes a `PreToolUse` hook that auto-approves `Agent(deep-research:dr-scraper-*)` spawns from the orchestrator, so most users don't need any additional setup.
-
-If your environment disables plugin hooks or you want explicit permissions in `settings.json`, allow the following:
+A `PreToolUse` hook auto-approves `Agent(deep-research:...)` spawns, so most users need no setup. If your environment disables plugin hooks, allow in `settings.json`:
 
 ```json
 {
@@ -40,79 +35,76 @@ If your environment disables plugin hooks or you want explicit permissions in `s
     "allow": [
       "WebSearch",
       "WebFetch",
-      "Glob",
-      "Grep",
-      "Read",
       "Agent(deep-research:dr-scraper-web)",
-      "Agent(deep-research:dr-scraper-codebase)"
+      "Agent(deep-research:dr-scraper-codebase)",
+      "Agent(deep-research:dr-verifier)"
     ]
   }
 }
 ```
 
-Background: Claude Code has known issues with `bypassPermissions` for subagents (see [#29110](https://github.com/anthropics/claude-code/issues/29110), [#24073](https://github.com/anthropics/claude-code/issues/24073)). The flat orchestrator → scraper architecture in v2.2.0 sidesteps these issues by avoiding nested `Agent` calls entirely.
+Background: Claude Code has known issues with `bypassPermissions` for subagents ([#29110](https://github.com/anthropics/claude-code/issues/29110), [#24073](https://github.com/anthropics/claude-code/issues/24073)). The flat orchestrator → scraper architecture sidesteps them by avoiding nested `Agent` calls.
 
 ## Usage
 
 ```bash
-# Basic research (auto-scales based on complexity)
-/deep-research "Caching strategies for Phoenix applications"
+# Basic research (lite tier: cheap verify, wide-and-shallow plan allowed)
+/dr "Caching strategies for Phoenix applications"
 
-# Force a specific mode
-/deep-research --mode codebase "Map all GenServer processes in this project"
+# Thorough, full escalation ladder
+/dr --tier thorough "Postgres partitioning strategies for multi-tenant SaaS"
+
+# Force a mode
+/dr --mode codebase "Map all GenServer processes in this project"
+
+# Explicit speed run: no verification, curl-only link check (recorded in metrics)
+/dr --fast "Quick survey of Rust HTTP clients"
 ```
 
 ## Architecture
 
 ```
-Orchestrator (Opus, Skill)
+Orchestrator (Skill)
   │
-  ├── For each sub-question:
-  │     ├── dr-scraper-web (Sonnet)   ──→ writes facts file
-  │     ├── dr-scraper-web (Sonnet)   ──→ writes facts file
-  │     └── dr-scraper-codebase (S.)  ──→ writes facts file
-  │
-  ├── Self-check ──→ reviews coverage, spawns follow-up scrapers if thin
-  └── Synthesize ──→ merge findings by theme, list source URLs, write metrics
+  ├── Plan + approval gate (dispatch budget, per-sub-question rationale)
+  ├── For each sub-question:                    [parallel]
+  │     ├── dr-scraper-web (Sonnet)       ──→ writes facts file
+  │     └── dr-scraper-codebase (Sonnet)  ──→ writes facts file
+  ├── Self-check ──→ fabrication triggers, follow-up scrapers (max 2 rounds)
+  ├── Verify     ──→ dr-verifier batches (~10 claims/agent), escalation ladder
+  ├── Link gate  ──→ curl sweep all Sources + ≤5 Playwright spot-renders
+  └── Synthesize ──→ themes, [^N] citations, Verification section, metrics
 ```
 
-Flat dispatch (orchestrator → scrapers, one hop). The previous `dr-analyst` middle layer was removed in v2.2.0 because nested `Agent` calls do not reliably propagate tool access through Claude Code's permission model (see [#29110](https://github.com/anthropics/claude-code/issues/29110)).
-
-Before scrapers are dispatched, the orchestrator presents a plan with the dispatch budget (count + per-sub-question depth, rationale, and angles) and asks for approval via `AskUserQuestion`. The user can approve, adjust (sub-question, depth, scraper count, mode, angles), or cancel. The gate is skipped only when the topic contains the literal `--yes` / `--no-confirm` token or when the budget is a single scraper.
-
-Agent .md files contain frontmatter (model, tools, permissions) plus the system prompt that defines output format and process. The orchestrator passes only the question, depth, constraints, and output path via the spawn `prompt` parameter — the agent body provides format and rules.
-
-A `PreToolUse` hook auto-approves `Agent(deep-research:...)` spawns from the orchestrator so users don't need to add Agent permissions manually.
-
-### Research modes
-
-- Web: external information via dr-scraper-web (depth-controlled)
-- Codebase: local code analysis via dr-scraper-codebase
-- Knowledge: orchestrator drafts top claims, then dispatches verification scrapers — no claim ships without a fetched source
-- Mixed: orchestrator spawns both web and codebase scrapers per sub-question
+Flat dispatch (orchestrator → sub-agents, one hop). Agent `.md` files carry frontmatter (model, tools, permissions) plus the system prompt; the orchestrator passes only question, depth, constraints, and output path.
 
 ## Plugin structure
 
 ```
 deep-research/
   .claude-plugin/
-    plugin.json                              # Plugin manifest
+    plugin.json                  # Plugin manifest
+    marketplace.json             # cortex-dr marketplace entry
   skills/
-    deep-research/
-      SKILL.md                               # Orchestrator
-      references/                            # Output format, research modes, error handling
+    dr/
+      SKILL.md                   # Orchestrator workflow
+      references/
+        verification.md          # Escalation-ladder detail
+        metrics.md               # METRICS v4 field glossary
+        output-format.md         # Report structure + citation rule
+        research-modes.md        # Modes + depth levels
+        error-handling.md        # Spawn/verifier/link-gate failures
   commands/
-    deep-research.md                         # /deep-research slash command
+    dr.md                        # /dr slash command
   agents/
-    dr-scraper-web.md                        # Web scraper (Sonnet)
-    dr-scraper-codebase.md                   # Codebase scraper (Sonnet)
+    dr-scraper-web.md            # Web scraper (Sonnet, Exa-first)
+    dr-scraper-codebase.md       # Codebase scraper (Sonnet)
+    dr-verifier.md               # Batch claim verifier (Sonnet)
   hooks/
-    hooks.json                               # PreToolUse auto-approve + Stop metrics
+    hooks.json                   # PreToolUse auto-approve + Stop metrics
   scripts/
-    auto-approve-subagents.sh                # PreToolUse hook
-    save-metrics.sh                          # Stop hook
-  scripts/
-    save-metrics.sh                          # Extracts metrics from output to jsonl
+    auto-approve-subagents.sh    # PreToolUse hook
+    save-metrics.sh              # Stop hook: extract + normalize metrics
 ```
 
 ## License

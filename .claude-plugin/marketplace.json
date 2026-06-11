@@ -4,14 +4,14 @@
     "name": "Mohamed-Alaboudi"
   },
   "metadata": {
-    "description": "Cortex fork of phyr97 deep-research: Exa verifier, escalation-ladder verify, Playwright link gate. Tracks upstream phyr97/deep-research."
+    "description": "Cortex fork of phyr97 deep-research: Exa verifier, mandatory escalation-ladder verify, curl link gate + Playwright spot-render. Tracks upstream phyr97/deep-research."
   },
   "plugins": [
     {
       "name": "deep-research",
       "source": ".",
-      "description": "Deep research with Exa-first scrapers + verifier, escalation-ladder adversarial verify, and a Playwright link gate. Cortex customization of phyr97/deep-research.",
-      "version": "3.2.0-cortex",
+      "description": "Deep research with Exa-first scrapers + verifier, mandatory escalation-ladder adversarial verify, and a curl link gate with bounded Playwright spot-render. Cortex customization of phyr97/deep-research.",
+      "version": "3.3.0-cortex",
       "keywords": [
         "research",
         "agents",

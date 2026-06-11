@@ -1,7 +1,7 @@
 {
   "name": "deep-research",
-  "version": "3.2.0-cortex",
-  "description": "Modular deep research plugin for Claude Code with auto-scaling, capped adversarial verification, and self-check",
+  "version": "3.3.0-cortex",
+  "description": "Modular deep research plugin for Claude Code with auto-scaling, mandatory batched adversarial verification, curl link gate, and self-check",
   "author": {
     "name": "phyr97"
   }

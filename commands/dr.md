@@ -11,12 +11,15 @@ arguments:
   - name: --tier
     description: "Cost/verify tier: lite (default), standard, thorough"
     required: false
+  - name: --fast
+    description: "Speed mode: skip verification, curl-only link gate, wide-and-shallow plan allowed"
+    required: false
 ---
 
 Invoke the `deep-research:dr` skill with the following input:
 
 - **Topic**: $ARGUMENTS
-- Parse any options (--mode, --tier, --verify3, --no-verify, --yes/--no-confirm) from the arguments
+- Parse any options (--mode, --tier, --fast, --no-verify, --yes/--no-confirm; --verify3 is deprecated) from the arguments
 - If no options detected, pass the full argument string as the topic
 
 The skill handles everything: mode detection, auto-scaling, scraper dispatch, claim
