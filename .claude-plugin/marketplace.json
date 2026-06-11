@@ -11,8 +11,15 @@
       "name": "deep-research",
       "source": ".",
       "description": "Deep research with Exa-first scrapers + verifier, escalation-ladder adversarial verify, and a Playwright link gate. Cortex customization of phyr97/deep-research.",
-      "version": "3.1.0-cortex",
-      "keywords": ["research", "agents", "web", "codebase", "exa", "playwright"]
+      "version": "3.1.1-cortex",
+      "keywords": [
+        "research",
+        "agents",
+        "web",
+        "codebase",
+        "exa",
+        "playwright"
+      ]
     }
   ]
 }
