@@ -89,16 +89,16 @@ Tier parameters:
 
 | Tier | Verify central-claims cap | Verification | Hard subagent cap |
 |------|---------------------------|--------------|-------------------|
-| lite | 8 | escalation ladder (Step 5) | 25 |
-| standard | 10 | escalation ladder (Step 5) | 35 |
-| thorough | 12 | escalation ladder (Step 5) | 55 |
+| lite | 8 | batched ladder (Step 5) | 25 |
+| standard | 10 | batched ladder (Step 5) | 35 |
+| thorough | 12 | batched ladder (Step 5) | 55 |
 
-Voter count is no longer a flat per-tier setting. Every claim starts at 1 voter; important
-claims get a 2nd; a useful contradiction escalates a 3rd; an unresolved contradiction
-throws the claim out. See Step 5. The tier now controls only the claim cap and the hard
-subagent cap. `--verify3` is deprecated (the ladder supersedes it); if passed, ignore it
-with a one-line note ("verify3 ist veraltet — die Eskalationsleiter ersetzt feste Voter,
-ignoriert"). The hard subagent cap is absolute — no flag raises it above the tier value.
+Verification is no longer one agent per claim. Round 1 batches up to ~10 claims into each
+`dr-verifier` agent; only important or contradicted claims get a 2nd/3rd batched re-check.
+See Step 5. The tier controls only the claim cap and the hard subagent cap. `--verify3` is
+deprecated (the batched ladder supersedes it); if passed, ignore it with a one-line note
+("verify3 ist veraltet — die gebündelte Eskalationsleiter ersetzt feste Voter, ignoriert").
+The hard subagent cap is absolute — no flag raises it above the tier value.
 
 ### Step 1: Plan
 
@@ -195,10 +195,10 @@ The floor for `deep` is hard. The ceilings are soft — exceed them only if the 
 Reason: beyond ~10 parallel subagents, each additional one delivers diminishing marginal coverage while linearly increasing token cost and timeout risk.
 
 **Hard subagent cap (tier-dependent).** Before dispatching, compute the planned total:
-`scrapers + planned verifiers`. With the escalation ladder (Step 5), estimate the planned
-verifier count as `central_claims + important_claims + expected_escalations` — i.e. 1 per
-central claim, +1 for each you expect to mark important, +1 for each you expect to escalate
-on a contradiction. A safe upper bound is `central_claims × 2`; use that if unsure. If
+`scrapers + planned verifiers`. With the batched ladder (Step 5), verifiers are now a small
+number of batch agents, not one per claim: estimate the planned verifier count as
+`ceil(central_claims / 10)` for Round 1, plus at most ~2 escalation batch agents (one
+Round-2, one Round-3). A safe upper bound is `ceil(central_claims / 10) + 2`. If
 `scrapers + planned_verifiers` exceeds the tier hard cap (lite 25 / standard 35 /
 thorough 55), trim in this order until it fits: (1) reduce verify claims (drop
 lowest-centrality / weakest-source first), (2) only then reduce scraper count. Record
@@ -289,67 +289,87 @@ Select the eligible `central` claims, capped at the tier's verify cap (lite 8, s
 with the strongest centrality and best source type; list the dropped ones under the
 report's Verification section as "not verified (cap)".
 
-**Verification is an escalation ladder, not a flat voter count.** Spend the cheapest
-amount of verification each claim actually needs, and escalate only when a result is both
-contested and worth resolving:
+**Verification BATCHES claims to save agent spawns, then escalates the few contested ones.**
+Do NOT spawn one agent per claim — that produces dozens of agents (e.g. 75 claims → 75
+agents). Instead, one `dr-verifier` handles a BATCH of ~10 claims, so the whole verify
+stage is a handful of agents (e.g. 75 claims → ~8 agents), and only contested or important
+claims get individually re-checked:
 
-1. **Round 1 — 1 voter (always).** Spawn exactly ONE `dr-verifier` for every selected
-   central claim. This is the minimum; most claims stop here.
-2. **Round 2 — 2nd voter for important claims.** A claim is *important* if it is a top
-   decision-driver for the research question (the strongest-centrality claims, the ones
-   the user's conclusion hinges on). For each important claim, spawn a 2nd `dr-verifier`.
-   Ordinary central claims stay at 1 voter.
-3. **Round 3 — escalate a useful contradiction.** If any voter returns `contradicted` for
-   a claim **and the claim is useful** (it materially affects the answer — not a
-   tangential aside), spawn a 3rd `dr-verifier` with the contradiction noted in its prompt
-   so it digs deeper than the one-search baseline.
-4. **Resolve or throw out.** After the 3rd look:
-   - If the deeper verifier confirms (or the contradiction was spurious) → the claim
-     survives with the resulting confidence.
-   - If it **still cannot be resolved** (the 3rd voter is `contradicted` or `uncertain`
-     against the claim) → **throw the claim out.** Drop it from the main findings and list
-     it under the report's Verification section as "removed — unresolved contradiction"
-     with the counter-source.
+1. **Round 1 — batched (always).** Group the selected central claims into batches of **up
+   to 10 claims each**. Spawn ONE `dr-verifier` per batch (75 claims → 8 agents; 10 claims
+   → 1 agent). Each batch agent returns one verdict per claim in its batch. This is the
+   minimum; most claims are fully resolved here.
+2. **Round 2 — 2nd look for important claims.** After reading Round-1 verdicts, collect the
+   *important* claims (top decision-drivers the user's conclusion hinges on). Send them as a
+   single new batch (up to 10) to ONE fresh `dr-verifier` for a second independent read.
+   Ordinary central claims are not re-checked.
+3. **Round 3 — escalate useful contradictions.** Collect every claim that came back
+   `contradicted` **and is useful** (materially affects the answer — not a tangential
+   aside). Send them as a single batch to ONE fresh `dr-verifier`, with each contradiction
+   noted in its prompt so it digs deeper than the one-search baseline. (If there are zero
+   such claims, skip this round — no agent.)
+4. **Resolve or throw out.** For each escalated claim, after the Round-3 look:
+   - If it now confirms (or the contradiction was spurious) → the claim survives with the
+     resulting confidence.
+   - If it **still cannot be resolved** (`contradicted`/`uncertain` against the claim) →
+     **throw the claim out.** Drop it from the main findings and list it under the report's
+     Verification section as "removed — unresolved contradiction" with the counter-source.
 
-Run rounds in waves: launch Round 1 in parallel; once you've read the verdicts, launch the
-Round-2/Round-3 escalations the verdicts triggered, in parallel. A claim with no
-contradiction and that is not "important" costs exactly 1 verifier.
+So a typical run is ~8 Round-1 agents + at most 1 Round-2 agent + at most 1 Round-3 agent —
+roughly 10 agents total for 75 claims, versus 75+ with per-claim spawning. A claim with no
+contradiction and that is not "important" costs no agent beyond its share of one batch.
 
-Respect the hard cap from Step 2 — count the planned verifiers as
-`central_claims + important_claims + expected_escalations`. If it would exceed the cap,
-reduce the claim count first (drop lowest-centrality), not the escalation logic — the
-ladder is what makes verification trustworthy.
+Run rounds in waves: launch all Round-1 batches in parallel; once you've read every
+verdict, launch the single Round-2 batch and/or single Round-3 batch that the verdicts
+triggered.
+
+Respect the hard cap from Step 2 — but with batching the verifier-agent count is now small
+(`ceil(claims/10)` for Round 1, plus at most ~2 escalation agents), so the cap is rarely
+the binding constraint. If the *claim* count still pushes you over, reduce claims first
+(drop lowest-centrality), not the batching or the escalation logic.
 
 Write verifier outputs into the same per-run directory used for scrapers, named
-`<run-dir>/verify-{claimIndex}-{voterIndex}.md` (voterIndex 1, 2, 3 across the rounds).
+`<run-dir>/verify-r{round}-b{batchIndex}.md` (e.g. `verify-r1-b3.md` is Round 1, batch 3;
+`verify-r3-b1.md` is the single Round-3 escalation batch).
 
-Spawn pattern per voter:
+Spawn pattern per batch (one agent, up to ~10 claims):
 
 <example>
 Agent(
   subagent_type: "deep-research:dr-verifier",
   model: "sonnet",
-  prompt: "Verify one claim. Follow your agent instructions for output format and return value.
+  prompt: "Verify the batch of claims below. Follow your agent instructions for output format and return value.
 
-CLAIM: Stripe charges 0.4% for ACH payments in 2026.
-QUOTE: \"ACH Direct Debit ... 0.4% per transaction (capped at $5.00)\"
-SOURCE_URL: https://stripe.com/pricing
-SOURCE_TYPE: doc
 QUESTION: What are Stripe's 2026 payment fees for SaaS?
-OUTPUT_FILE: /tmp/deep-research/<run-dir>/verify-1-1.md"
+
+CLAIM 1: Stripe charges 0.4% for ACH payments in 2026.
+QUOTE 1: \"ACH Direct Debit ... 0.4% per transaction (capped at $5.00)\"
+SOURCE_URL 1: https://stripe.com/pricing
+SOURCE_TYPE 1: doc
+
+CLAIM 2: Stripe Billing costs 0.7% of recurring revenue.
+QUOTE 2: \"Billing ... 0.7% on recurring payments\"
+SOURCE_URL 2: https://stripe.com/billing/pricing
+SOURCE_TYPE 2: doc
+
+... (up to 10 claims) ...
+
+OUTPUT_FILE: /tmp/deep-research/<run-dir>/verify-r1-b1.md"
 )
 </example>
 
-Launch all verifiers in parallel. Each returns only `DONE|{path}`; read the verdict files
-afterward.
+Launch all Round-1 batch agents in parallel. Each returns only `DONE|{path}`; read the
+verdict files afterward — each file holds one `### Verdict N` block per claim in that batch.
 
-**Aggregation (matches the ladder).**
-- **Stopped at 1 voter** (ordinary central claim, no contradiction): that voter's verdict
-  stands.
-- **2 voters** (important claim, both agree): combined verdict is the agreement.
-- **Escalated to a 3rd** (a useful claim was contradicted): the 3rd, deeper verifier
-  decides. If it confirms → the claim survives. If it stays `contradicted`/`uncertain` →
-  **throw the claim out** (Step 5, point 4).
+**Aggregation (per claim, across the rounds it appeared in).** Each claim's verdict comes
+from its `### Verdict N` block in the batch file(s) that covered it:
+- **Round 1 only** (ordinary central claim, not important, not contradicted): its Round-1
+  verdict stands.
+- **Round 1 + Round 2** (important claim): if the two reads agree, that's the verdict; if
+  they disagree, treat it as contested and fold it into Round 3.
+- **Escalated to Round 3** (a useful claim was contradicted in an earlier round): the
+  Round-3 verdict decides. If it confirms → the claim survives. If it stays
+  `contradicted`/`uncertain` → **throw the claim out** (Step 5, point 4).
 
 Map the surviving verdict to confidence:
 - all/most `confirmed` + primary source → `high`
@@ -429,11 +449,13 @@ The new fields after `follow_up_needed` are for compliance tracking — they let
 Verify-stage fields (v3):
 
 - `verify_tier`: `"lite" | "standard" | "thorough"`
-- `verify_voters`: `"ladder"` — verification uses the Step 5 escalation ladder, not a
-  fixed voter count (kept in the schema for back-compat; always `"ladder"` now)
+- `verify_voters`: `"batched-ladder"` — verification batches ~10 claims per agent in
+  Round 1, then escalates contested/important claims (kept in the schema for back-compat)
 - `claims_verified`: int — central claims sent to Step 5 (Round 1 count)
-- `claims_escalated_2`: int — claims that got a 2nd voter (important claims)
-- `claims_escalated_3`: int — claims that triggered a 3rd voter (useful contradiction)
+- `verifier_agents`: int — total `dr-verifier` agents actually spawned across all rounds
+  (≈ `ceil(claims/10)` + escalation batches; this is what batching shrinks)
+- `claims_escalated_2`: int — important claims given a 2nd (Round-2) read
+- `claims_escalated_3`: int — claims escalated to the Round-3 deep re-check
 - `claims_thrown_out`: int — claims removed after an unresolved contradiction
 - `claims_confirmed`: int
 - `claims_uncertain`: int
@@ -446,7 +468,7 @@ Verify-stage fields (v3):
 Template:
 
 ```
-<!-- METRICS:{"run_id":"<epoch-seconds>","topic":"...","mode":"...","scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"scraper_count_per_subquestion":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL,"approval_gate_action":"approved","verify_tier":"lite","verify_voters":"ladder","claims_verified":N,"claims_escalated_2":N,"claims_escalated_3":N,"claims_thrown_out":N,"claims_confirmed":N,"claims_uncertain":N,"claims_contradicted":N,"links_checked":N,"links_dead":N,"total_subagents":N,"hard_cap_hit":false} -->
+<!-- METRICS:{"run_id":"<epoch-seconds>","topic":"...","mode":"...","scrapers":N,"scraper_errors":N,"sources_total":N,"sources_by_type":{"doc":N,"blog":N,"forum":N,"github":N,"code":N},"gaps_found":N,"self_check_passed":BOOL,"follow_up_needed":BOOL,"scraper_count_per_subquestion":[{"depth":"deep","count":4}],"depth_corridor_violations":0,"claims_with_citation":N,"claims_total":N,"constraints_used":BOOL,"knowledge_factcheck_done":BOOL_OR_NULL,"approval_gate_action":"approved","verify_tier":"lite","verify_voters":"batched-ladder","claims_verified":N,"verifier_agents":N,"claims_escalated_2":N,"claims_escalated_3":N,"claims_thrown_out":N,"claims_confirmed":N,"claims_uncertain":N,"claims_contradicted":N,"links_checked":N,"links_dead":N,"total_subagents":N,"hard_cap_hit":false} -->
 ```
 
 ## Context window protection
@@ -456,7 +478,7 @@ Template:
 | Scraper return values | DONE|path only | ~100 words |
 | File reads | 600 words x ~12 files max | ~7,200 words |
 | Verifier return values | DONE|path only | ~100 words |
-| Verifier file reads | ~120 words x ≤~24 files (ladder: ~1-2 verifiers/claim, rarely 3) | ~2,900 words |
+| Verifier file reads | ~1 batch file per ~10 claims (each holds N verdict blocks) + ≤2 escalation files | ~3,000 words |
 
 Scrapers return only `DONE|{path}`. The orchestrator reads files on demand. Each scraper file is capped at ~600 words; for a typical 4-sub-question / 3-scraper-each run that's ~12 files.
 
