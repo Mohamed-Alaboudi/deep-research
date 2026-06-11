@@ -1,0 +1,18 @@
+{
+  "name": "cortex-dr",
+  "owner": {
+    "name": "Mohamed-Alaboudi"
+  },
+  "metadata": {
+    "description": "Cortex fork of phyr97 deep-research: Exa verifier, escalation-ladder verify, Playwright link gate. Tracks upstream phyr97/deep-research."
+  },
+  "plugins": [
+    {
+      "name": "deep-research",
+      "source": ".",
+      "description": "Deep research with Exa-first scrapers + verifier, escalation-ladder adversarial verify, and a Playwright link gate. Cortex customization of phyr97/deep-research.",
+      "version": "3.1.0-cortex",
+      "keywords": ["research", "agents", "web", "codebase", "exa", "playwright"]
+    }
+  ]
+}
