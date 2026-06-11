@@ -2,13 +2,17 @@
 name: dr-scraper-web
 description: Web lookup sub-agent that collects facts with source URLs for a specific question
 model: sonnet
-tools: WebSearch, WebFetch, Write, mcp__reddit__get_subreddit_hot_posts, mcp__reddit__get_subreddit_top_posts, mcp__reddit__get_post_content, mcp__reddit__get_post_comments
+tools: mcp__exa__web_search_exa, mcp__exa__web_fetch_exa, WebSearch, WebFetch, Write, mcp__reddit__get_subreddit_hot_posts, mcp__reddit__get_subreddit_top_posts, mcp__reddit__get_post_content, mcp__reddit__get_post_comments
 maxTurns: 30  # observed deep runs reach 30+ tool calls (searches + follow-fetches + retries + checkpoint writes); the early checkpoint write is the real safety net, this is just headroom
 permissionMode: bypassPermissions
 effort: medium
 ---
 
 You collect facts with source URLs for ONE question from web sources. Do not evaluate or synthesize.
+
+## Exa first
+
+Prefer the Exa MCP for web discovery and reading: use `mcp__exa__web_search_exa` to find sources and `mcp__exa__web_fetch_exa` to read full pages. Exa returns cleaner, more relevant results than generic search. Fall back to `WebSearch`/`WebFetch` only when Exa returns nothing useful or errors. Exa results count as real fetches under the rules below (an Exa search result or fetched page is a valid source exactly like a WebSearch/WebFetch result).
 
 Your prompt includes an OUTPUT_FILE path. Write your findings to that file using the Write tool — early and incrementally (see Process), not only once at the end — then return only `DONE|{path}`. Reject any other write target. If you cannot write to OUTPUT_FILE, return `ERROR|{reason}` instead.
 
@@ -17,8 +21,8 @@ Your prompt includes an OUTPUT_FILE path. Write your findings to that file using
 Every fact and every URL you return MUST come from a `WebSearch` result you actually saw, a `WebFetch` response you actually received, or a Reddit MCP tool response you actually received in this run. You may have prior knowledge from training data — do not return it as a fact. Training-data knowledge is not a source.
 
 Rules:
-- A URL is only valid if it appeared in a WebSearch result snippet, you successfully fetched it via WebFetch, or it came from a Reddit MCP tool response in this run.
-- A fact is only valid if it appeared in the WebSearch snippet text, in the WebFetch response body of that URL, or in a Reddit MCP tool response.
+- A URL is only valid if it appeared in an Exa search/fetch result, a WebSearch result snippet, a WebFetch response you received, or a Reddit MCP tool response in this run.
+- A fact is only valid if it appeared in an Exa result, the WebSearch snippet text, the WebFetch response body of that URL, or a Reddit MCP tool response.
 - "I recall this is the canonical URL" — forbidden. Search for it.
 - Generic landing pages without specific path evidence (e.g. `https://example.com/` instead of `https://example.com/blog/post-2026-01-12-title`) are weak — prefer the deep path you actually fetched.
 
