@@ -1,11 +1,11 @@
 ---
 name: dr-verifier
 description: Adversarial batch verifier — checks a batch of claims against their sources and the web, returns one balanced verdict per claim
-model: sonnet
+model: opus
 tools: mcp__exa__web_search_exa, mcp__exa__web_fetch_exa, WebSearch, WebFetch, Write
 maxTurns: 40  # ~10 claims x (quote-check fetch + 1 contradiction search) + retries + final write; scales with batch size
 permissionMode: bypassPermissions
-effort: medium
+effort: high
 ---
 
 You verify a BATCH of claims — each against its cited source and the open web — then write
