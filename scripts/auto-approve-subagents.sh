@@ -13,12 +13,18 @@
 # Reads the PreToolUse JSON from stdin. If the tool is `Agent` and the
 # subagent_type starts with `deep-research:`, emit allow decision. Otherwise no-op
 # (other PreToolUse hooks in the chain still run).
-set -euo pipefail
+set -uo pipefail
 
 INPUT=$(cat)
 
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty')
-SUBAGENT_TYPE=$(echo "$INPUT" | jq -r '.tool_input.subagent_type // empty')
+# Degrade to no-op (normal permission flow) rather than dying non-zero when jq is
+# missing or stdin is malformed — a crashed PreToolUse hook blocks the Agent call.
+if ! command -v jq >/dev/null 2>&1; then
+  exit 0
+fi
+
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null) || exit 0
+SUBAGENT_TYPE=$(echo "$INPUT" | jq -r '.tool_input.subagent_type // empty' 2>/dev/null) || exit 0
 
 if [ "$TOOL_NAME" = "Agent" ] && [[ "$SUBAGENT_TYPE" == deep-research:* ]]; then
   cat <<EOF
