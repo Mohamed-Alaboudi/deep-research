@@ -1,6 +1,6 @@
 # Deep Research (cortex-dr fork)
 
-A modular [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin for deep research across web, codebase, and knowledge domains. Uses Sonnet for sub-agents and lookups; the orchestrator runs on the session model.
+A modular [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin for deep research across web, codebase, and knowledge domains. Scrapers run on Sonnet; the verifier runs on Opus (subtle claim-checking is the one place the extra capability pays for itself); the orchestrator runs on the session model.
 
 Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research). Tracks upstream; diverges with Exa-first scrapers, a batch verifier, a mandatory verification stage, and a curl link gate.
 
@@ -71,12 +71,12 @@ Orchestrator (Skill)
   │     ├── dr-scraper-web (Sonnet)       ──→ writes facts file
   │     └── dr-scraper-codebase (Sonnet)  ──→ writes facts file
   ├── Self-check ──→ fabrication triggers, follow-up scrapers (max 2 rounds)
-  ├── Verify     ──→ dr-verifier batches (~10 claims/agent), escalation ladder
+  ├── Verify     ──→ dr-verifier batches (~10 claims/agent, Opus), escalation ladder
   ├── Link gate  ──→ curl sweep all Sources + ≤5 Playwright spot-renders
   └── Synthesize ──→ themes, [^N] citations, Verification section, metrics
 ```
 
-Flat dispatch (orchestrator → sub-agents, one hop). Agent `.md` files carry frontmatter (model, tools, permissions) plus the system prompt; the orchestrator passes only question, depth, constraints, and output path.
+Flat dispatch (orchestrator → sub-agents, one hop). Agent `.md` files carry frontmatter (model, tools, permissions) plus the system prompt; the orchestrator passes a neutral search angle, depth, constraints, and output path — deliberately *not* the desired answer or the orchestrator's working thesis, so scrapers gather what's there rather than confirming a hypothesis.
 
 ## Plugin structure
 
@@ -99,7 +99,7 @@ deep-research/
   agents/
     dr-scraper-web.md            # Web scraper (Sonnet, Exa-first)
     dr-scraper-codebase.md       # Codebase scraper (Sonnet)
-    dr-verifier.md               # Batch claim verifier (Sonnet)
+    dr-verifier.md               # Batch claim verifier (Opus)
   hooks/
     hooks.json                   # PreToolUse auto-approve + Stop metrics
   scripts/

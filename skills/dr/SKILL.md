@@ -60,7 +60,7 @@ Parse these optional flags from the topic string (strip them before treating the
 | `--verify3` | **Deprecated.** Ignored with a one-line note: "verify3 is deprecated — the batched escalation ladder replaced fixed voters." |
 | `--yes` / `--no-confirm` | Skip the approval gate |
 
-Tier default: `--tier` if given; else `default_tier` from `~/.claude/deep-research/config.json` (`cat` it once before planning); else `lite`.
+Tier default: `--tier` if given; else `lite`. (Optional override: if `~/.claude/deep-research/config.json` exists, a `default_tier` key in it wins over `lite` — but do NOT `cat` a file you have no reason to believe exists; only read it if a prior step in this session already surfaced it. Never fabricate its contents.)
 
 | Tier | Verify claim cap | Verify shape | Hard subagent cap |
 |------|------------------|--------------|-------------------|
@@ -123,7 +123,11 @@ If "Adjust": apply any change spelled out in their notes; if no detail given, as
 
 Create a per-run directory: `mkdir -p /tmp/deep-research/$(date +%s)`. The epoch value is the run's `run_id` (record it in METRICS — it lets a later triage match a problematic run back to its session transcript). File naming: `<run-dir>/sq{N}-{web|codebase}-{M}.md`.
 
-Each scraper handles ONE narrow angle. Phrase angles distinctly so scrapers don't duplicate work. Launch all scrapers across all sub-questions in parallel:
+Each scraper handles ONE narrow angle. Phrase angles distinctly so scrapers don't duplicate work.
+
+**Withhold your thesis (anti-confirmation-bias).** A scraper that is told which answer you expect will preferentially find evidence for it. Pass each scraper a *neutral* angle — the thing to find out — and deliberately NOT: the answer you're leaning toward, the decision you're trying to justify, the hypothesis you're testing, or framing that telegraphs a desired conclusion. Write the QUESTION as an open information-gathering task ("What are the documented X for Y?"), never as a leading one ("Confirm that X is the best Y"). CONSTRAINTS may carry scope (stack, region, timeframe) but must not smuggle in the preferred outcome. This is the single highest-leverage guard against fabrication-by-agreement.
+
+Launch all scrapers across all sub-questions in parallel:
 
 <example>
 Agent(
@@ -196,6 +200,16 @@ For any URL returning `000`, `4xx`, or `5xx` (some servers reject HEAD), retry o
 **6b. Playwright spot-render (skip under `--fast`).** Render at most **5** URLs in the Playwright MCP — only URLs that (a) back a Key Finding AND (b) were not already fetched by a verifier this run (a verifier fetch is equivalent evidence). For each: `browser_navigate`, then `browser_snapshot`; confirm the cited content is visibly present. Loads but content not found → keep the source, append `[link: content not located]`, downgrade solely-dependent claims to `low` confidence. Dead/blocked → treat as 6a-dead.
 
 If curl is unavailable or every check errors, do not silently skip: add one line under Sources — "Link check could not run; links unverified." That is the only allowed degradation; never fabricate a checked status.
+
+### Step 6.5: Research-review gate (before synthesis)
+
+A bad line of research becomes many bad lines of report — so review the *corpus*, not just the draft. Before writing anything, look across all verdicts + link results and ask:
+
+- **Coverage:** does every sub-question have at least one confirmed (or uncontested) central claim? A sub-question left with only contradicted/unverified/dead-link claims is a hole.
+- **Contradiction:** did two sources give incompatible answers to the same central question, with the verifier unable to resolve it? That is a finding to surface, not paper over.
+- **Thinness:** is any Key Finding resting on a single source, or on sources that all share one origin?
+
+If a gap is **material to the answer** AND you have follow-up rounds left (max 2 per sub-question, Step 3 budget), dispatch one targeted re-scrape with a sharper, still-neutral angle, then re-verify only the new central claims. Otherwise, do NOT silently smooth it over — carry it into the report's **Contradictions & Open Questions** section explicitly. This gate is a no-op on a clean run; its only job is to stop synthesis from laundering weak research into confident prose.
 
 ### Step 7: Synthesize and present
 
