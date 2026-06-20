@@ -14,7 +14,7 @@ You coordinate research by spawning sub-agents and synthesizing their findings. 
 ## Three rules
 
 1. End your final response with `<!-- METRICS:{...} -->` so the stop hook can record the run.
-2. Spawn scrapers with `model: "sonnet"` and an explicit depth level, because without these they inherit your model (expensive) and default to shallow searches (poor results).
+2. Spawn **scrapers** with `model: "sonnet"` and an explicit depth level, because without these they inherit your model (expensive) and default to shallow searches (poor results). **Verifiers are the exception — spawn `dr-verifier` with `model: "opus"`** (its verdicts are the load-bearing judgment step; never pass `"sonnet"` to a verifier). The model is set at spawn time, so the per-agent `model:` here overrides the agent frontmatter — get it right at every spawn site.
 3. Copy every source URL from scraper outputs into your final Sources section, because the user needs them to verify claims.
 
 ## Forbidden: direct-fetch and substitute-agent fallbacks
@@ -59,6 +59,7 @@ Parse these optional flags from the topic string (strip them before treating the
 | `--no-verify` | Skip the verify stage only. Record `verify_skipped_reason: "no-verify-flag"` |
 | `--verify3` | **Deprecated.** Ignored with a one-line note: "verify3 is deprecated — the batched escalation ladder replaced fixed voters." |
 | `--yes` / `--no-confirm` | Skip the approval gate |
+| `--reverify <run_id>` | **Finish verification of an already-completed run** without re-scraping. Routes to Step 0.7 and exits there — skips planning, scraping, and synthesis. Use to upgrade a report shipped `VERIFICATION-INCOMPLETE` (interrupted run) to verified. |
 
 Tier default: `--tier` if given; else `lite`. (Optional override: if `~/.claude/deep-research/config.json` exists, a `default_tier` key in it wins over `lite` — but do NOT `cat` a file you have no reason to believe exists; only read it if a prior step in this session already surfaced it. Never fabricate its contents.)
 
@@ -69,6 +70,26 @@ Tier default: `--tier` if given; else `lite`. (Optional override: if `~/.claude/
 | thorough | 12 | full ladder | 55 |
 
 **Verification is mandatory.** The ONLY legitimate ways to skip it: `--fast`, `--no-verify`, an explicit user instruction this session (record `verify_skipped_reason: "user-request"`), zero central claims, or codebase mode. "The run is taking long" or "the user seems to want speed" is NOT a skip reason — at lite tier, verification costs exactly one extra subagent. Never decide on your own to drop it.
+
+### Step 0.7: Re-verify branch (`--reverify <run_id>` only)
+
+If the topic string contains `--reverify <run_id>`, run **this step only**, then go straight to the report patch below and stop. Do NOT plan, scrape, or re-synthesize — the scrapers already ran; you are finishing the verification that an interrupted run skipped. This is the surgical "upgrade a `VERIFICATION-INCOMPLETE` report to verified" path.
+
+1. **Locate the run dir.** Try in order: `~/.claude/deep-research/raw/<run_id>/` (durable saved copy), then `/tmp/deep-research/<run_id>/` (fresh, pre-reboot). If neither exists or it holds no `sq*.md` scraper files, abort with: "No saved scraper files for run `<run_id>` — `~/.claude/deep-research/raw/<run_id>/` and `/tmp/deep-research/<run_id>/` are both empty. A re-verify needs the original fetches; re-run `/dr` from scratch instead." (Tip the user that `--reverify` only works if the run's raw dir was preserved before reboot.)
+
+2. **Locate the report.** Find the matching file under `~/.claude/deep-research/`. Prefer an exact `run_id:` frontmatter match (reports written after this version carry it — see Step 7). Otherwise match on topic/date and, if more than one plausibly matches, list the candidates and ask the user which file to upgrade via `AskUserQuestion`. Never patch a report you are not sure maps to this run.
+
+3. **Re-extract central claims** from the run dir exactly as in **Step 4** (claim · quote · source_url · source_type · centrality). Only `central` claims with a URL source are eligible. Use the report's own existing tier (read its frontmatter / Verification notes) for the claim cap; default to `standard` (10) if unrecorded.
+
+4. **Run the verify ladder** exactly as in **Step 5** (batched, Opus `dr-verifier`, escalation rounds, same `references/verification.md` spawn pattern and aggregation). Verifier output files go in the run dir as usual: `<run-dir>/verify-r{round}-b{batch}.md`. The **same no-fallback rule applies** — if `dr-verifier` cannot spawn, abort cleanly; never verify the claims yourself.
+
+5. **Patch the report in place** (do not write a new dated file; never overwrite a *different* report):
+   - Flip the frontmatter `status:` from `VERIFICATION-INCOMPLETE …` to `verified — re-verified <YYYY-MM-DD> via --reverify` and add/update a `verified_claims: N` key.
+   - Remove the ⚠️ "Verification status / VERIFICATION-INCOMPLETE" banner block (or replace it with a one-line "✅ Verified: N central claims checked by an Opus adversarial verifier on <date>.").
+   - Attach verdict-derived **confidence** to each central Key Finding (Step 5 mapping), and fill the **Verification** section per `references/output-format.md` (Removed / Uncertain / Not verified). Drop any claim the ladder threw out as an unresolved contradiction, moving it into Verification with its counter-source.
+   - Append a fresh METRICS comment for the verify-only run: same flat schema, `scrapers: 0`, `verify_skipped_reason: null`, `run_id` = the re-verified run, plus the real verify counts. Add `"reverify": true`.
+
+6. **Report what changed** in chat: claims checked, how many confirmed / uncertain / removed, and that the durable report file was upgraded in place. Then stop — Steps 1–8 do not run on a `--reverify`.
 
 ### Step 1: Plan
 
@@ -217,7 +238,7 @@ Synthesize across scraper files **by theme**, not by sub-question or scraper. Pr
 
 After presenting, ask: "Should I save the results as a report? (stored under ~/.claude/deep-research/)"
 
-If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`: slug lowercase ASCII (ä→ae, ö→oe, ü→ue, ß→ss, drop other accents), keep `[a-z0-9]`, collapse runs of other characters to a single `-`, trim edge dashes, max 60 chars; on collision append `-2`, `-3`, … (never overwrite); prepend YAML frontmatter with `topic` (verbatim), `date`, `mode`, `sources_count`, then a blank line, then the report.
+If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`: slug lowercase ASCII (ä→ae, ö→oe, ü→ue, ß→ss, drop other accents), keep `[a-z0-9]`, collapse runs of other characters to a single `-`, trim edge dashes, max 60 chars; on collision append `-2`, `-3`, … (never overwrite); prepend YAML frontmatter with `topic` (verbatim), `date`, `mode`, `tier`, `run_id` (the epoch run dir — lets `--reverify <run_id>` find this exact report later), `sources_count`, then a blank line, then the report. If the run shipped before verification finished, also add `status: VERIFICATION-INCOMPLETE — …` so a later `--reverify` (Step 0.7) can spot and upgrade it.
 
 ### Step 8: Metrics
 

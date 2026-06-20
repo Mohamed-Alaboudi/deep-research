@@ -1,13 +1,13 @@
 # Verification: spawn pattern, aggregation, confidence
 
-Detail for SKILL.md Step 5. Read this before dispatching verifiers.
+Detail for SKILL.md Step 5. Read this before dispatching verifiers. The **same spawn pattern, ladder, and aggregation apply unchanged to a `--reverify <run_id>` run** (SKILL.md Step 0.7) — a re-verify is just Step 5 run against an already-saved run dir, writing its verdict files into that same dir.
 
 ## Spawn pattern (one agent per batch, up to ~10 claims)
 
 <example>
 Agent(
   subagent_type: "deep-research:dr-verifier",
-  model: "sonnet",
+  model: "opus",   // verifier judgment is the load-bearing step — keep it on Opus; this matches the dr-verifier frontmatter pin. Do NOT pass "sonnet" here (that is the scraper model, not the verifier's).
   prompt: "Verify the batch of claims below. Follow your agent instructions for output format and return value.
 
 QUESTION: What are Stripe's 2026 payment fees for SaaS?
