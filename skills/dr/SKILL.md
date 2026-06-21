@@ -69,13 +69,13 @@ Tier default: `--tier` if given; else `lite`. (Optional override: if `~/.claude/
 | standard | 10 | full ladder (see Step 5) | 35 |
 | thorough | 12 | full ladder | 55 |
 
-**Verification is mandatory.** The ONLY legitimate ways to skip it: `--fast`, `--no-verify`, an explicit user instruction this session (record `verify_skipped_reason: "user-request"`), zero central claims, or codebase mode. "The run is taking long" or "the user seems to want speed" is NOT a skip reason — at lite tier, verification costs exactly one extra subagent. Never decide on your own to drop it.
+**Round-1 verification is a hard gate — not skippable by judgment.** The ONLY ways to skip Round 1 entirely are the explicit flags `--fast` or `--no-verify`, or the structural cases zero-central-claims / codebase mode. Everything else — including the user saying "be quick" or "skip the deep checking" mid-run — still runs Round 1 (one Opus `dr-verifier`, 1 subagent even at lite). A spoken "go faster" request demotes only the **escalation rounds** (Round 2/3): record `verify_skipped_reason: null` (Round 1 still ran) and simply don't escalate. "The run is taking long" or "the user seems to want speed" is NEVER a reason to drop Round 1 — at lite tier it costs exactly one extra subagent. If the user truly wants zero verification, that is the `--fast` / `--no-verify` flag, which is explicit and machine-checkable; do not infer a full skip from conversational hints.
 
 ### Step 0.7: Re-verify branch (`--reverify <run_id>` only)
 
 If the topic string contains `--reverify <run_id>`, run **this step only**, then go straight to the report patch below and stop. Do NOT plan, scrape, or re-synthesize — the scrapers already ran; you are finishing the verification that an interrupted run skipped. This is the surgical "upgrade a `VERIFICATION-INCOMPLETE` report to verified" path.
 
-1. **Locate the run dir.** Try in order: `~/.claude/deep-research/raw/<run_id>/` (durable saved copy), then `/tmp/deep-research/<run_id>/` (fresh, pre-reboot). If neither exists or it holds no `sq*.md` scraper files, abort with: "No saved scraper files for run `<run_id>` — `~/.claude/deep-research/raw/<run_id>/` and `/tmp/deep-research/<run_id>/` are both empty. A re-verify needs the original fetches; re-run `/dr` from scratch instead." (Tip the user that `--reverify` only works if the run's raw dir was preserved before reboot.)
+1. **Locate the run dir.** Try in order: `~/.claude/deep-research/raw/<run_id>/` (durable saved copy), then `/tmp/deep-research/<run_id>/` (fresh, pre-reboot). If neither exists or it holds no `sq*.md` scraper files, abort with: "No saved scraper files for run `<run_id>` — `~/.claude/deep-research/raw/<run_id>/` and `/tmp/deep-research/<run_id>/` are both empty. A re-verify needs the original fetches; re-run `/dr` from scratch instead." (Tip the user that `--reverify` works whenever either the durable raw mirror — `~/.claude/deep-research/raw/<run_id>/`, written at the end of Step 3, survives reboot — or the `/tmp` copy still holds the run's fetches. A run interrupted *before* reaching the Step 3 mirror only has the `/tmp` copy, which a reboot clears.)
 
 2. **Locate the report.** Find the matching file under `~/.claude/deep-research/`. Prefer an exact `run_id:` frontmatter match (reports written after this version carry it — see Step 7). Otherwise match on topic/date and, if more than one plausibly matches, list the candidates and ask the user which file to upgrade via `AskUserQuestion`. Never patch a report you are not sure maps to this run.
 
@@ -183,6 +183,14 @@ Read every file under the run directory, grouped by sub-question. Apply these **
 
 If no trigger fires, continue directly to Step 4.
 
+**Mirror the raw fetches (durable copy for `--reverify`).** Once the scraper files have passed the self-check above, copy them out of the volatile `/tmp` dir into the durable mirror so an interrupted run is recoverable (Step 0.7 reads from there first). One Bash call — `find`-based so it is robust across bash/zsh (an unmatched `*.md` glob never errors or expands), and the guard leaves no empty `raw/<run_id>/` dir when nothing matched:
+
+```
+if find /tmp/deep-research/<run_id> -maxdepth 1 -name '*.md' -type f | grep -q .; then mkdir -p ~/.claude/deep-research/raw/<run_id> && find /tmp/deep-research/<run_id> -maxdepth 1 -name '*.md' -type f -exec cp {} ~/.claude/deep-research/raw/<run_id>/ \; ; fi
+```
+
+`<run_id>` is the epoch dir name from Step 2. This is the step that makes `--reverify` dependable rather than luck-of-the-tmp-dir — without it the durable copy never exists. Negligible cost (one copy, no new subagent). Re-copy is harmless (idempotent overwrite); do it again after any follow-up scraper round so the mirror stays complete.
+
 ### Step 4: Extract candidate claims
 
 Orchestrator work — no agents. For each concrete, falsifiable statement in the scraper files record: **claim** (one checkable sentence), **quote** (verbatim `quote:` snippet if present, else empty — the verifier fetches the source itself), **source_url** + **source_type**, and **centrality**: `central` (directly answers the research question), `supporting`, or `tangential`.
@@ -248,7 +256,7 @@ End your final response with the METRICS comment — a **flat JSON object with e
 <!-- METRICS:{"schema_version":4,"run_id":"<epoch>","topic":"...","mode":"web","tier":"lite","fast":false,"subquestions":N,"scrapers":N,"scraper_errors":N,"follow_up_rounds":N,"verifier_agents":N,"claims_verified":N,"claims_confirmed":N,"claims_contradicted":N,"claims_thrown_out":N,"verify_skipped_reason":null,"links_checked":N,"links_dead":N,"renders_done":N,"sources_total":N,"corridor_violations":N,"hard_cap_hit":false,"approval_gate_action":"approved"} -->
 ```
 
-`verify_skipped_reason` is `null` when verification ran, else one of `"fast-flag"`, `"no-verify-flag"`, `"user-request"`, `"no-central-claims"`, `"codebase-mode"`. `corridor_violations` counts sub-questions outside the **active tier's** corridor (Step 1 table).
+`verify_skipped_reason` is `null` when Round-1 verification ran (including runs where only escalation was dropped for speed), else one of `"fast-flag"`, `"no-verify-flag"`, `"no-central-claims"`, `"codebase-mode"`. There is no `"user-request"` full-skip value — a conversational "go faster" demotes escalation only and keeps `verify_skipped_reason: null`; a genuine zero-verify run comes from the `--fast`/`--no-verify` flag. `corridor_violations` counts sub-questions outside the **active tier's** corridor (Step 1 table).
 
 ## Context window protection
 
@@ -273,7 +281,7 @@ Before finishing, check:
 1. Response ends with the METRICS comment, flat schema, all keys present?
 2. Every Key Finding and Findings statement carries `[^N]` or `[interpretation]`?
 3. Every `[^N]` resolves to a numbered Sources entry?
-4. If verification ran: every central claim has a verdict-derived confidence, OR appears in the Verification section (unverified / removed / not verified (cap))? If it did not run: is `verify_skipped_reason` one of the legitimate values — not your own judgment call?
+4. Did Round-1 verification actually run? It MUST have, unless `verify_skipped_reason` is exactly one of `"fast-flag"`, `"no-verify-flag"`, `"no-central-claims"`, `"codebase-mode"` — all of which come from an explicit flag or a structural fact, never from a judgment call or a conversational "be quick" (that demotes escalation only, with `verify_skipped_reason: null`). If you skipped Round 1 for any other reason, STOP and run it. When it ran: every central claim has a verdict-derived confidence OR appears in the Verification section (unverified / removed / not verified (cap)).
 5. Did the curl sweep cover every Sources URL (each alive, `[link: dead]`-tagged, or covered by the "Link check could not run" note)?
 
 If any check fails, re-read the scraper files and fix the gaps before sending. A claim without a source is a bug, not an output.

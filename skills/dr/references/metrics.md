@@ -19,7 +19,7 @@ The METRICS comment is a single flat JSON object — exactly these keys, no nest
 | `claims_confirmed` | int | Claims whose final verdict was `confirmed` |
 | `claims_contradicted` | int | Claims that received a `contradicted` verdict in any round |
 | `claims_thrown_out` | int | Claims removed after an unresolved contradiction |
-| `verify_skipped_reason` | string\|null | `null` when verification ran; else `"fast-flag"`, `"no-verify-flag"`, `"user-request"`, `"no-central-claims"`, `"codebase-mode"` |
+| `verify_skipped_reason` | string\|null | `null` when Round-1 verification ran (incl. runs where only escalation was dropped for speed); else `"fast-flag"`, `"no-verify-flag"`, `"no-central-claims"`, `"codebase-mode"`. No `"user-request"` value — Round 1 is not skippable by a conversational request. |
 | `links_checked` | int | Sources URLs covered by the curl sweep |
 | `links_dead` | int | URLs classified dead after the GET retry |
 | `renders_done` | int | Playwright spot-renders performed (0-5) |
