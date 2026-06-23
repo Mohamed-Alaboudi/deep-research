@@ -1,8 +1,11 @@
-# Deep Research for Claude Code (`/dr`)
+# Deep Research for Claude Code (`/dr` + `/spinner`)
 
-A self-installing [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin that adds a `/dr` command for **deep, multi-source, fact-checked research**: it fans out scraper agents, has an Opus agent adversarially try to *refute* every central claim, link-checks the sources, and hands you a cited report.
+A self-installing [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin with two commands:
 
-Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research).
+- **`/dr`** — **deep, multi-source, fact-checked research**: it fans out scraper agents, has an Opus agent adversarially try to *refute* every central claim, link-checks the sources, and hands you a cited report.
+- **`/spinner`** — an **uncorrelated second opinion** on any decision: it spawns a fresh Opus sub-agent that knows only the decision (not your reasoning), reads the code itself, finds what you'd have missed, and commits to the best option. No API key needed.
+
+Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research), extended with `/spinner`.
 
 ---
 
@@ -43,14 +46,19 @@ claude mcp add-json exa -s user '{
 ## Using it
 
 ```bash
+# Research
 /dr "Caching strategies for Phoenix applications"          # default lite tier
 /dr --tier thorough "Postgres partitioning for multi-tenant SaaS"   # full verification ladder
 /dr --mode codebase "Map all GenServer processes in this project"   # research this repo
 /dr --fast "Quick survey of Rust HTTP clients"             # skip verification (quick survey)
 /dr --reverify <run_id>                                    # finish an interrupted run, no re-scrape
+
+# Second opinion on a decision
+/spinner "Redis vs Postgres LISTEN/NOTIFY for our job queue — which?"   # fresh Opus reviewer
+/spinner                                                   # uses options laid out earlier in the chat
 ```
 
-Reports save to `~/.claude/deep-research/`. Per-run metrics append to `~/.claude/deep-research/metrics.jsonl`.
+`/dr` reports save to `~/.claude/deep-research/`; per-run metrics append to `~/.claude/deep-research/metrics.jsonl`. `/spinner` returns a Decision + missed edge cases + runner-up + confidence — it never auto-executes.
 
 ## What makes it trustworthy
 

@@ -9,7 +9,9 @@ Do this conversationally — explain each step in one line before you run it, an
 
 ## What this repo is
 
-A Claude Code **plugin** (not a standalone skill). It adds a `/dr` command that runs deep, multi-source, **adversarially fact-checked** research:
+A Claude Code **plugin** (not a standalone skill). Installing it adds **two** commands:
+
+**`/dr`** — deep, multi-source, **adversarially fact-checked** research:
 
 - An **orchestrator** skill (`skills/dr/SKILL.md`) plans the research and fans out subagents — it never searches directly.
 - **Scraper** subagents (`agents/dr-scraper-web.md`, `agents/dr-scraper-codebase.md`, run on Sonnet) gather facts, each tagged with a source URL or file path.
@@ -17,9 +19,13 @@ A Claude Code **plugin** (not a standalone skill). It adds a `/dr` command that 
 - A **link gate** curls every cited URL and spot-renders up to 5 load-bearing pages.
 - Hooks (`hooks/hooks.json`) auto-approve the subagent spawns and record per-run metrics.
 
+**`/spinner`** — an *uncorrelated second opinion* on a decision (`skills/spinner/SKILL.md`). It spawns one fresh sub-agent (on **Opus**) that knows only the decision — not the reasoning that led there — reads the code itself, hunts for what the anchored view missed, and commits to the best option. Use it at any fork worth pressure-testing. **It needs no API key** — it uses Claude's own tools; the deep-research path is an optional thing the sub-agent may choose.
+
 Full design: see `PLUGIN.md` in this repo.
 
-## The one hard dependency
+## The one hard dependency (for `/dr` only)
+
+`/spinner` works the moment the plugin is installed — skip to Step 4. The dependency below is **only** for `/dr`'s web research.
 
 **The scrapers call the Exa MCP** (`mcp__exa__web_search_exa` / `web_fetch_exa`). Without it they fall back to plain `WebSearch`/`WebFetch`, which is weaker and may be unavailable. **You must set up the Exa MCP with the user's own API key** — this is the only step that needs information from them.
 
@@ -95,7 +101,17 @@ If the user's setup disables plugin hooks (or they get permission prompts for ev
 
 ### Step 5 — Smoke test
 
-Have the user **restart Claude Code** (so the plugin + MCP load), then run a tiny, cheap research job:
+Have the user **restart Claude Code** (so the plugin loads), then test both commands.
+
+**`/spinner`** (works with no API key — test this first):
+
+```
+/spinner "Two ways to store config: a single JSON file vs one env var per setting. Which?"
+```
+
+Expected: it spawns one fresh Opus sub-agent, which returns a Decision / Edge cases / Runner-up / Confidence verdict. If you get that structure back, `/spinner` is live.
+
+**`/dr`** (needs the Exa MCP from Step 3 to be at its best):
 
 ```
 /dr --tier lite "What is the latest stable Node.js LTS version and its release date?"
@@ -109,6 +125,8 @@ Expected: a research plan + approval gate → a few scrapers → an Opus verifie
 
 ## After install — how the user runs it
 
+**Research (`/dr`):**
+
 - `/dr "<question>"` — default `lite` tier (cheap verify, wide-and-shallow allowed).
 - `/dr --tier thorough "<question>"` — full escalation-ladder verification.
 - `/dr --mode codebase "<question>"` — research this repo instead of the web.
@@ -116,6 +134,13 @@ Expected: a research plan + approval gate → a few scrapers → an Opus verifie
 - `/dr --reverify <run_id>` — finish verification of an interrupted run without re-scraping.
 
 Reports save to `~/.claude/deep-research/`; raw fetches mirror to `~/.claude/deep-research/raw/<run_id>/`; per-run metrics append to `~/.claude/deep-research/metrics.jsonl`.
+
+**Second opinion (`/spinner`):**
+
+- `/spinner "<decision + the options>"` — pressure-test a choice with a fresh Opus sub-agent.
+- `/spinner` (no args) — uses the options Claude laid out earlier in the conversation.
+
+Returns a Decision + the edge cases the anchored view missed + a runner-up + confidence. It decides, it does **not** auto-execute — acting on the verdict is a separate step you ask for.
 
 ## Updating later
 

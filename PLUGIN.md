@@ -94,8 +94,11 @@ deep-research/
         output-format.md         # Report structure + citation rule
         research-modes.md        # Modes + depth levels
         error-handling.md        # Spawn/verifier/link-gate failures
+    spinner/
+      SKILL.md                   # Uncorrelated second-opinion workflow (Opus reviewer)
   commands/
     dr.md                        # /dr slash command
+    spinner.md                   # /spinner slash command
   agents/
     dr-scraper-web.md            # Web scraper (Sonnet, Exa-first)
     dr-scraper-codebase.md       # Codebase scraper (Sonnet)
