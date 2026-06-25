@@ -15,7 +15,7 @@ You coordinate research by spawning sub-agents and synthesizing their findings. 
 
 1. End your final response with `<!-- METRICS:{...} -->` so the stop hook can record the run.
 2. Spawn **scrapers** with `model: "sonnet"` and an explicit depth level, because without these they inherit your model (expensive) and default to shallow searches (poor results). **Verifiers are the exception — spawn `dr-verifier` with `model: "opus"`** (its verdicts are the load-bearing judgment step; never pass `"sonnet"` to a verifier). The model is set at spawn time, so the per-agent `model:` here overrides the agent frontmatter — get it right at every spawn site.
-3. Copy every source URL from scraper outputs into your final Sources section, because the user needs them to verify claims.
+3. Track every source URL from scraper outputs through the pipeline — verification and the link gate run on them, and the **saved** report's Sources section needs them. The **chat report is clean prose** (no `[^N]`, no Sources list — see `references/output-format.md`); citations are restored only in the saved `.md` file.
 
 ## Forbidden: direct-fetch and substitute-agent fallbacks
 
@@ -86,7 +86,7 @@ If the topic string contains `--reverify <run_id>`, run **this step only**, then
 5. **Patch the report in place** (do not write a new dated file; never overwrite a *different* report):
    - Flip the frontmatter `status:` from `VERIFICATION-INCOMPLETE …` to `verified — re-verified <YYYY-MM-DD> via --reverify` and add/update a `verified_claims: N` key.
    - Remove the ⚠️ "Verification status / VERIFICATION-INCOMPLETE" banner block (or replace it with a one-line "✅ Verified: N central claims checked by an Opus adversarial verifier on <date>.").
-   - Attach verdict-derived **confidence** to each central Key Finding (Step 5 mapping), and fill the **Verification** section per `references/output-format.md` (Removed / Uncertain / Not verified). Drop any claim the ladder threw out as an unresolved contradiction, moving it into Verification with its counter-source.
+   - Attach verdict-derived **confidence** to each central claim (Step 5 mapping), and fill the saved report's **Verification** section per `references/output-format.md` (Removed / Uncertain / Not verified) — `--reverify` edits the saved `.md`, which keeps the cited Verification + Sources sections. Drop any claim the ladder threw out as an unresolved contradiction, moving it into Verification with its counter-source.
    - Append a fresh METRICS comment for the verify-only run: same flat schema, `scrapers: 0`, `verify_skipped_reason: null`, `run_id` = the re-verified run, plus the real verify counts. Add `"reverify": true`.
 
 6. **Report what changed** in chat: claims checked, how many confirmed / uncertain / removed, and that the durable report file was upgraded in place. Then stop — Steps 1–8 do not run on a `--reverify`.
@@ -179,7 +179,7 @@ Read every file under the run directory, grouped by sub-question. Apply these **
    - **5a. Source/URL mismatch** — Facts section has zero URLs, or every URL is a bare domain root without a deep path.
    - **5b. No fetch evidence** — no URL with `/issues/<digits>`, `/pull/<digits>`, `/releases/tag/`, `/commit/<hash>`, date stamps (`/YYYY/MM/` or `-YYYY-MM-DD-`), `?v=`/`?id=`, or `#fragment` — AND zero quoted strings AND zero version numbers. Indistinguishable from a memory dump.
 
-**Recovery — resume before respawn.** If a scraper stalled (turn-limit death, thin checkpoint file), prefer `SendMessage` to that agent's ID — it still holds its real fetches in context — before spawning a fresh follow-up. Either path counts toward the limit: maximum 2 follow-up rounds per sub-question, then record the gap under **Contradictions & Open Questions** instead of papering over it.
+**Recovery — resume before respawn.** If a scraper stalled (turn-limit death, thin checkpoint file), prefer `SendMessage` to that agent's ID — it still holds its real fetches in context — before spawning a fresh follow-up. Either path counts toward the limit: maximum 2 follow-up rounds per sub-question, then record the gap (a plain-language bullet under **What You Need to Consider** in chat; the saved report's **Verification** section) instead of papering over it.
 
 If no trigger fires, continue directly to Step 4.
 
@@ -238,15 +238,15 @@ A bad line of research becomes many bad lines of report — so review the *corpu
 - **Contradiction:** did two sources give incompatible answers to the same central question, with the verifier unable to resolve it? That is a finding to surface, not paper over.
 - **Thinness:** is any Key Finding resting on a single source, or on sources that all share one origin?
 
-If a gap is **material to the answer** AND you have follow-up rounds left (max 2 per sub-question, Step 3 budget), dispatch one targeted re-scrape with a sharper, still-neutral angle, then re-verify only the new central claims. Otherwise, do NOT silently smooth it over — carry it into the report's **Contradictions & Open Questions** section explicitly. This gate is a no-op on a clean run; its only job is to stop synthesis from laundering weak research into confident prose.
+If a gap is **material to the answer** AND you have follow-up rounds left (max 2 per sub-question, Step 3 budget), dispatch one targeted re-scrape with a sharper, still-neutral angle, then re-verify only the new central claims. Otherwise, do NOT silently smooth it over — carry it into the report explicitly (as a plain-language bullet under **What You Need to Consider** in chat, and the saved report's **Verification** section). This gate is a no-op on a clean run; its only job is to stop synthesis from laundering weak research into confident prose.
 
 ### Step 7: Synthesize and present
 
-Synthesize across scraper files **by theme**, not by sub-question or scraper. Present using the structure in `references/output-format.md`. **Every Key Finding and every Findings statement ends with `[^N]`** pointing to the numbered Sources section, or is marked `[interpretation]`. No claim ships without one of the two.
+Synthesize across scraper files **by theme**, not by sub-question or scraper. Present using the structure in `references/output-format.md`: **Bottom Line → What You Need to Consider → Recommended Actions → Supporting Detail.** The **chat report is clean prose — no `[^N]`, no Sources section.** Lead with the answer and what the user must weigh/do; the verification already happened internally, so write with confidence (and flag low-confidence or contradicted items in plain words, per the format file).
 
 After presenting, ask: "Should I save the results as a report? (stored under ~/.claude/deep-research/)"
 
-If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`: slug lowercase ASCII (ä→ae, ö→oe, ü→ue, ß→ss, drop other accents), keep `[a-z0-9]`, collapse runs of other characters to a single `-`, trim edge dashes, max 60 chars; on collision append `-2`, `-3`, … (never overwrite); prepend YAML frontmatter with `topic` (verbatim), `date`, `mode`, `tier`, `run_id` (the epoch run dir — lets `--reverify <run_id>` find this exact report later), `sources_count`, then a blank line, then the report. If the run shipped before verification finished, also add `status: VERIFICATION-INCOMPLETE — …` so a later `--reverify` (Step 0.7) can spot and upgrade it.
+If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`. **The saved file is the cited version**, not a copy of the clean chat output: take the same Bottom Line / Considerations / Recommended Actions / Supporting Detail body, re-attach `[^N]` to every factual statement (synthesis → `[interpretation]`), and append the full **Sources** section (per `references/output-format.md`). This preserves traceability and lets `--reverify` work. Slug: lowercase ASCII (ä→ae, ö→oe, ü→ue, ß→ss, drop other accents), keep `[a-z0-9]`, collapse runs of other characters to a single `-`, trim edge dashes, max 60 chars; on collision append `-2`, `-3`, … (never overwrite); prepend YAML frontmatter with `topic` (verbatim), `date`, `mode`, `tier`, `run_id` (the epoch run dir — lets `--reverify <run_id>` find this exact report later), `sources_count`, then a blank line, then the report. If the run shipped before verification finished, also add `status: VERIFICATION-INCOMPLETE — …` so a later `--reverify` (Step 0.7) can spot and upgrade it.
 
 ### Step 8: Metrics
 
@@ -279,9 +279,9 @@ Read `references/error-handling.md` for spawn failures, vague questions, and qua
 Before finishing, check:
 
 1. Response ends with the METRICS comment, flat schema, all keys present?
-2. Every Key Finding and Findings statement carries `[^N]` or `[interpretation]`?
-3. Every `[^N]` resolves to a numbered Sources entry?
+2. **Chat report** is clean prose in the right order (Bottom Line → What You Need to Consider → Recommended Actions → Supporting Detail) with **no `[^N]` tags and no Sources section**?
+3. **If you saved a report:** every factual statement in the saved file carries `[^N]` or `[interpretation]`, and every `[^N]` resolves to a numbered Sources entry? (Chat output is exempt — it's intentionally citation-free.)
 4. Did Round-1 verification actually run? It MUST have, unless `verify_skipped_reason` is exactly one of `"fast-flag"`, `"no-verify-flag"`, `"no-central-claims"`, `"codebase-mode"` — all of which come from an explicit flag or a structural fact, never from a judgment call or a conversational "be quick" (that demotes escalation only, with `verify_skipped_reason: null`). If you skipped Round 1 for any other reason, STOP and run it. When it ran: every central claim has a verdict-derived confidence OR appears in the Verification section (unverified / removed / not verified (cap)).
 5. Did the curl sweep cover every Sources URL (each alive, `[link: dead]`-tagged, or covered by the "Link check could not run" note)?
 
-If any check fails, re-read the scraper files and fix the gaps before sending. A claim without a source is a bug, not an output.
+If any check fails, re-read the scraper files and fix the gaps before sending. In the **saved** file, a claim without a source is a bug, not an output — but the chat report is intentionally clean prose, and the underlying verification still ran on the sources regardless of what the chat shows.

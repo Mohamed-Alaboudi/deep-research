@@ -26,7 +26,7 @@ The plugin's `PreToolUse` hook normally auto-approves these spawns. Permission e
 ## WebFetch failures inside a scraper
 
 - Scraper retries once, then marks "source inaccessible" and continues with the remaining searches.
-- Orchestrator: if a scraper file is thin or empty, dispatch a follow-up scraper with rephrased queries; surface persistent gaps in "Contradictions & Open Questions".
+- Orchestrator: if a scraper file is thin or empty, dispatch a follow-up scraper with rephrased queries; surface persistent gaps as a plain-language bullet under "What You Need to Consider" (chat) and in the saved report's "Verification" section.
 
 ## Vague research questions
 
