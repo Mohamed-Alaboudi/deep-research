@@ -83,6 +83,7 @@ Concrete commands (per platform). Run `agent-reach doctor --json` once and only 
 
 - **YouTube** (no login; works whenever `yt-dlp` is present):
   - Transcript: `yt-dlp --write-sub --write-auto-sub --sub-lang "en,zh-Hans,zh" --skip-download -o '/tmp/dr-yt/%(id)s' "<watch_url>"`, then read the resulting `.vtt`/`.srt` and strip `WEBVTT`/timestamp lines when quoting. If no captions exist, record only the video URL + title as a weak pointer (per the YouTube rule above) — never invent transcript text.
+    - If yt-dlp warns about an `n`/`nsig` **challenge** ("challenge solving failed", "Remote component challenge solver"), YouTube now requires a JS challenge solver: re-run with `--remote-components ejs:github` (needs a JS runtime such as `node` on PATH). On a machine where these are set in `~/.config/yt-dlp/config`, the bare command above already works. If it still fails, fall back to the metadata pointer — do not fabricate.
   - Metadata: `yt-dlp --skip-download --print "%(title)s | %(uploader)s | %(upload_date)s" "<watch_url>"`.
 - **Bilibili** (`bilibili` channel; search works with no login):
   - Search: `bili search "<query>" --type video -n 5` (needs the `bili` CLI). Read a video: `bili video <BVxxx>`; subtitles via `opencli bilibili subtitle <BVxxx>` when OpenCLI is present. Source URL = `https://www.bilibili.com/video/<BVxxx>`.
