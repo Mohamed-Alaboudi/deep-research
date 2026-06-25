@@ -79,11 +79,19 @@ For a few platforms where Exa/WebFetch are known-weak, you MAY use the external 
 - **Channel health (optional)**: `agent-reach doctor --json` lists which channels are live. Use only channels reporting status `ok`; a channel that is `off`/`warn` may need an interactive login you cannot do — in that case fall back gracefully to the normal tools and note nothing special.
 - **PROVENANCE — NON-NEGOTIABLE**: any fact obtained via agent-reach is under the EXACT SAME "no facts without real fetches" contract as everything else. Every such fact MUST carry the canonical source URL (the YouTube watch URL, the tweet URL, the bilibili/XHS/Xueqiu page URL) AND a verbatim `quote:` snippet drawn from the content agent-reach actually returned — a transcript line, the tweet's text, the post body, quoted verbatim. **NO URL or NO real returned content = NO fact.** Never dress up training-data knowledge as an agent-reach result. This is exactly what lets the downstream Opus verifier and the link gate validate the claim.
 
-Concrete commands:
+Concrete commands (per platform). Run `agent-reach doctor --json` once and only attempt a channel whose `status` is `"ok"`; `"warn"`/`"off"` means it needs a login/cookie you cannot provide — skip it and fall back to Exa/WebFetch silently.
 
-- **YouTube transcript** (fully verified path): `yt-dlp --skip-download --write-auto-subs --sub-lang en --sub-format vtt -o '/tmp/dr-yt/%(id)s' "<watch_url>"`, then read the resulting `.vtt` and strip the `WEBVTT`/timestamp lines when quoting. Auto-subs may be absent for some videos — if so, record only the video URL + title as a weak pointer, exactly as the YouTube rule above says.
-- **YouTube metadata**: `yt-dlp --skip-download --print "%(title)s | %(uploader)s | %(upload_date)s" "<watch_url>"`.
-- **Other platforms (Bilibili / XHS / Xueqiu / Twitter-X)**: run `agent-reach doctor --json` to confirm the channel is `ok`, then call the upstream tool that channel routes to (e.g. a `twitter search`/`tweet` read for X when the twitter channel is `ok`; bilibili/XHS/Xueqiu via their channels). The actual read command is whatever that backend exposes — consult `agent-reach doctor --json` for which backend is active; do NOT invent flags for a tool you are unsure of. The one path shown concretely above (yt-dlp) is the only one you should hard-code.
+- **YouTube** (no login; works whenever `yt-dlp` is present):
+  - Transcript: `yt-dlp --write-sub --write-auto-sub --sub-lang "en,zh-Hans,zh" --skip-download -o '/tmp/dr-yt/%(id)s' "<watch_url>"`, then read the resulting `.vtt`/`.srt` and strip `WEBVTT`/timestamp lines when quoting. If no captions exist, record only the video URL + title as a weak pointer (per the YouTube rule above) — never invent transcript text.
+  - Metadata: `yt-dlp --skip-download --print "%(title)s | %(uploader)s | %(upload_date)s" "<watch_url>"`.
+- **Bilibili** (`bilibili` channel; search works with no login):
+  - Search: `bili search "<query>" --type video -n 5` (needs the `bili` CLI). Read a video: `bili video <BVxxx>`; subtitles via `opencli bilibili subtitle <BVxxx>` when OpenCLI is present. Source URL = `https://www.bilibili.com/video/<BVxxx>`.
+  - **Never use `yt-dlp` for Bilibili** — its anti-bot returns HTTP 412 for yt-dlp. Bilibili goes through `bili`/OpenCLI only.
+- **Twitter/X** (`twitter` channel; needs a logged-in cookie — only if `doctor` says `ok`): `twitter search "<query>" -n 10`, read one with `twitter tweet "<tweet_url_or_id>"`. Source URL = the tweet's `x.com/.../status/<id>`.
+- **XiaoHongShu / 小红书** (`xiaohongshu` channel; needs OpenCLI browser login — only if `ok`): `opencli xiaohongshu search "<query>" -f yaml`, then `opencli xiaohongshu note "<NOTE_URL>" -f yaml`. **You must search first and read via the returned URL** — XHS enforces an `xsec_token`, so a bare note id will not read. Source URL = the note URL from the search result.
+- **Xueqiu / 雪球** (`xueqiu` channel; needs a cookie — only if `ok`): use the channel's quote/search; source URL = the `xueqiu.com/S/<symbol>` page.
+
+For any channel that is not `ok`, or any platform not in this list (generic web, Reddit, GitHub), do NOT use agent-reach — use Exa/WebFetch / the Reddit MCP exactly as before. Do not invent flags beyond those shown here; if a documented command errors, mark the source inaccessible and move on, never fabricate.
 
 The Write tool overwrites the whole file, so every write must contain the full set of facts you have so far, not just the new ones. The checkpoint write (step 3) is your safety net; the final write (step 7) is the real output. At deep depth, once you pass ~6 searches, write another intermediate checkpoint so a late timeout never costs more than the last search round.
 
