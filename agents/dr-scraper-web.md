@@ -2,7 +2,7 @@
 name: dr-scraper-web
 description: Web lookup sub-agent that collects facts with source URLs for a specific question
 model: sonnet
-tools: mcp__exa__web_search_exa, mcp__exa__web_fetch_exa, WebSearch, WebFetch, Write, mcp__reddit__get_subreddit_hot_posts, mcp__reddit__get_subreddit_top_posts, mcp__reddit__get_post_content, mcp__reddit__get_post_comments
+tools: mcp__exa__web_search_exa, mcp__exa__web_fetch_exa, WebSearch, WebFetch, Write, mcp__reddit__get_subreddit_hot_posts, mcp__reddit__get_subreddit_top_posts, mcp__reddit__get_post_content, mcp__reddit__get_post_comments, Bash
 maxTurns: 30  # observed deep runs reach 30+ tool calls (searches + follow-fetches + retries + checkpoint writes); the early checkpoint write is the real safety net, this is just headroom
 permissionMode: bypassPermissions
 effort: medium
@@ -69,6 +69,21 @@ Prefer: official docs > GitHub > recognized blogs > forum posts.
 Source-specific limits you should know:
 - **Reddit**: do not chase Reddit through `site:reddit.com` WebSearch — it usually returns nothing. When the question benefits from community experience or first-hand opinions (not for every search), use the Reddit MCP tools instead: browse a relevant subreddit with `mcp__reddit__get_subreddit_hot_posts` or `get_subreddit_top_posts`, then pull real content with `mcp__reddit__get_post_content` and `get_post_comments`. A Reddit fact still needs its thread URL as the source and still obeys the no-facts-without-a-real-fetch rule — an MCP call you actually made counts as a real fetch.
 - **YouTube**: WebFetch on a `watch?v=` page returns only nav/footer chrome, never the transcript. You may record the video URL and title as a pointer, but never present "transcript" content you did not actually receive. A YouTube URL with no real fetched quote is a weak source.
+
+## Hard-platform fetch via agent-reach (optional)
+
+For a few platforms where Exa/WebFetch are known-weak, you MAY use the external `agent-reach` CLI to fetch real content. This is **gap-fill only and entirely optional** — it AUGMENTS the rules above, it does not replace "Exa first" or "No facts without real fetches".
+
+- **Check availability first**: run `command -v agent-reach`. If it is absent, silently use the normal tools (Exa/WebFetch) — do NOT error, do NOT mention in the facts that anything was missing.
+- **Use it ONLY for these platforms**: YouTube (real transcripts/subtitles), Bilibili, XiaoHongShu (小红书), Xueqiu (雪球), and Twitter/X (WebFetch hits a login wall there). For **everything else — generic web, Reddit, GitHub — keep using Exa/WebFetch and the Reddit MCP exactly as today.** Do not route those through agent-reach.
+- **Channel health (optional)**: `agent-reach doctor --json` lists which channels are live. Use only channels reporting status `ok`; a channel that is `off`/`warn` may need an interactive login you cannot do — in that case fall back gracefully to the normal tools and note nothing special.
+- **PROVENANCE — NON-NEGOTIABLE**: any fact obtained via agent-reach is under the EXACT SAME "no facts without real fetches" contract as everything else. Every such fact MUST carry the canonical source URL (the YouTube watch URL, the tweet URL, the bilibili/XHS/Xueqiu page URL) AND a verbatim `quote:` snippet drawn from the content agent-reach actually returned — a transcript line, the tweet's text, the post body, quoted verbatim. **NO URL or NO real returned content = NO fact.** Never dress up training-data knowledge as an agent-reach result. This is exactly what lets the downstream Opus verifier and the link gate validate the claim.
+
+Concrete commands:
+
+- **YouTube transcript** (fully verified path): `yt-dlp --skip-download --write-auto-subs --sub-lang en --sub-format vtt -o '/tmp/dr-yt/%(id)s' "<watch_url>"`, then read the resulting `.vtt` and strip the `WEBVTT`/timestamp lines when quoting. Auto-subs may be absent for some videos — if so, record only the video URL + title as a weak pointer, exactly as the YouTube rule above says.
+- **YouTube metadata**: `yt-dlp --skip-download --print "%(title)s | %(uploader)s | %(upload_date)s" "<watch_url>"`.
+- **Other platforms (Bilibili / XHS / Xueqiu / Twitter-X)**: run `agent-reach doctor --json` to confirm the channel is `ok`, then call the upstream tool that channel routes to (e.g. a `twitter search`/`tweet` read for X when the twitter channel is `ok`; bilibili/XHS/Xueqiu via their channels). The actual read command is whatever that backend exposes — consult `agent-reach doctor --json` for which backend is active; do NOT invent flags for a tool you are unsure of. The one path shown concretely above (yt-dlp) is the only one you should hard-code.
 
 The Write tool overwrites the whole file, so every write must contain the full set of facts you have so far, not just the new ones. The checkpoint write (step 3) is your safety net; the final write (step 7) is the real output. At deep depth, once you pass ~6 searches, write another intermediate checkpoint so a late timeout never costs more than the last search round.
 
