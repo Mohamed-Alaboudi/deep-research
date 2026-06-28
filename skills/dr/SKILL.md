@@ -183,6 +183,13 @@ Read every file under the run directory, grouped by sub-question. Apply these **
 
 If no trigger fires, continue directly to Step 4.
 
+**`/vidi` candidate review (optional, bounded).** While reading the scraper files, watch for `VIDI-CANDIDATE: <url> — <why>` lines a web scraper may emit for a YouTube video whose on-screen content (demo, slides, dashboard, code, charts) is load-bearing to the question and not captured by its transcript/description. These are *suggestions*, not orders. For each, decide:
+- **Is it material?** Would the video's visuals actually change or strengthen the answer, vs. a "nice to have"? If the transcript already carries the substance, skip it.
+- **Budget.** `/vidi` is a heavy single-video visual pass — treat it like a follow-up scraper round, not a freebie. Cap at **1–2 `/vidi` runs per whole research run**; if more are flagged, pick only the most decision-critical. On `--fast`, skip `/vidi` entirely.
+- **How to run it.** For a chosen candidate, invoke the `vidi` skill on the watch URL and fold its visual findings into the corpus under the same provenance contract as any source: the fact carries the YouTube URL plus a `quote:`/on-screen-description drawn from what `/vidi` actually reported. A `/vidi`-derived claim that is central still goes through Step 5 verification like everything else.
+
+If no `VIDI-CANDIDATE` lines appear, or none clear the material+budget bar, this is a no-op — continue.
+
 **Mirror the raw fetches (durable copy for `--reverify`).** Once the scraper files have passed the self-check above, copy them out of the volatile `/tmp` dir into the durable mirror so an interrupted run is recoverable (Step 0.7 reads from there first). One Bash call — `find`-based so it is robust across bash/zsh (an unmatched `*.md` glob never errors or expands), and the guard leaves no empty `raw/<run_id>/` dir when nothing matched:
 
 ```

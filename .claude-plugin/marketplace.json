@@ -11,7 +11,7 @@
       "name": "deep-research",
       "source": ".",
       "description": "Deep research with Exa-first scrapers + verifier, mandatory escalation-ladder adversarial verify, and a curl link gate with bounded Playwright spot-render. Cortex customization of phyr97/deep-research.",
-      "version": "3.5.1-cortex",
+      "version": "3.5.2-cortex",
       "keywords": [
         "research",
         "agents",
