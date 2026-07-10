@@ -48,12 +48,14 @@ def fail(reason, snippet=''):
     print('DROPPED: ' + reason + (' | ' + snippet[:200] if snippet else ''), file=sys.stderr)
     sys.exit(0)
 
+raw = sys.stdin.read()
+# Two callers: the Stop hook pipes a JSON payload ({last_assistant_message: ...});
+# the /dr skill pipes the raw METRICS comment line directly (so it never prints to chat).
 try:
-    data = json.load(sys.stdin)
-except Exception as e:
-    fail('stop-hook stdin is not valid JSON: %r' % e)
-
-msg = data.get('last_assistant_message', '')
+    data = json.loads(raw)
+    msg = data.get('last_assistant_message', '') if isinstance(data, dict) else raw
+except Exception:
+    msg = raw
 # Non-greedy first (flat schema), greedy fallback if the topic contains '} -->'.
 match = re.search(r'<!-- METRICS:(\{.*?\}) -->', msg, re.DOTALL)
 greedy = re.search(r'<!-- METRICS:(\{.*\}) -->', msg, re.DOTALL)

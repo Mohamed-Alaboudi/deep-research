@@ -13,7 +13,7 @@ You coordinate research by spawning sub-agents and synthesizing their findings. 
 
 ## Three rules
 
-1. End your final response with `<!-- METRICS:{...} -->` so the stop hook can record the run.
+1. Record the run by piping the `<!-- METRICS:{...} -->` line to the recorder script (Step 8) — **never print the comment in your reply** (it renders verbatim in the terminal).
 2. Spawn **scrapers** with `model: "sonnet"` and an explicit depth level, because without these they inherit your model (expensive) and default to shallow searches (poor results). **Verifiers are the exception — spawn `dr-verifier` with `model: "opus"`** (its verdicts are the load-bearing judgment step; never pass `"sonnet"` to a verifier). The model is set at spawn time, so the per-agent `model:` here overrides the agent frontmatter — get it right at every spawn site.
 3. Track every source URL from scraper outputs through the pipeline — verification and the link gate run on them, and the **saved** report's Sources section needs them. The **chat report is clean prose** (no `[^N]`, no Sources list — see `references/output-format.md`); citations are restored only in the saved `.md` file.
 
@@ -146,6 +146,8 @@ Create a per-run directory: `mkdir -p /tmp/deep-research/$(date +%s)`. The epoch
 
 Each scraper handles ONE narrow angle. Phrase angles distinctly so scrapers don't duplicate work.
 
+**Search-backend resilience (automatic — do not abort on it).** Scrapers and the verifier lead with the Exa MCP but degrade on their own: if Exa is absent or errors (402 / out-of-credits / rate-limit), they fall back — Exa → built-in `WebSearch`/`WebFetch` → DuckDuckGo MCP → direct `WebFetch` on known URLs — without retrying Exa in that run. An Exa 402 is NOT a spawn failure; do not trigger the no-fallback abort for it (that abort is only for *sub-agent spawn* failure and the direct-fetch/substitute-agent prohibition below — the source-evidence + verification pipeline stays fully intact on the fallback backends). This keeps `/dr` working when exa.ai runs out of credits.
+
 **Withhold your thesis (anti-confirmation-bias).** A scraper that is told which answer you expect will preferentially find evidence for it. Pass each scraper a *neutral* angle — the thing to find out — and deliberately NOT: the answer you're leaning toward, the decision you're trying to justify, the hypothesis you're testing, or framing that telegraphs a desired conclusion. Write the QUESTION as an open information-gathering task ("What are the documented X for Y?"), never as a leading one ("Confirm that X is the best Y"). CONSTRAINTS may carry scope (stack, region, timeframe) but must not smuggle in the preferred outcome. This is the single highest-leverage guard against fabrication-by-agreement.
 
 Launch all scrapers across all sub-questions in parallel:
@@ -257,11 +259,16 @@ If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`. **The saved 
 
 ### Step 8: Metrics
 
-End your final response with the METRICS comment — a **flat JSON object with exactly these keys** (no nesting, no extra keys, no omissions — the stop hook normalizes, but drift makes runs unaggregatable). Field meanings: `references/metrics.md`.
+Record the run's metrics — a **flat JSON object with exactly these keys** (no nesting, no extra keys, no omissions — the recorder normalizes, but drift makes runs unaggregatable). Field meanings: `references/metrics.md`.
 
+**Do NOT print the METRICS comment in your reply** (it renders verbatim in the terminal and clutters the report). Instead, pipe it to the recorder via a single Bash call. Resolve the script path version-proof, then pipe the filled-in comment line:
+
+```bash
+DR_ROOT=$(python3 -c "import json,os;print(json.load(open(os.path.expanduser('~/.claude/plugins/installed_plugins.json')))['plugins']['deep-research@cortex-dr'][0]['installPath'])")
+printf '%s\n' '<!-- METRICS:{"schema_version":4,"run_id":"<epoch>","topic":"...","mode":"web","tier":"lite","fast":false,"subquestions":N,"scrapers":N,"scraper_errors":N,"follow_up_rounds":N,"verifier_agents":N,"claims_verified":N,"claims_confirmed":N,"claims_contradicted":N,"claims_thrown_out":N,"verify_skipped_reason":null,"links_checked":N,"links_dead":N,"renders_done":N,"sources_total":N,"corridor_violations":N,"hard_cap_hit":false,"approval_gate_action":"approved"} -->' | "$DR_ROOT/scripts/save-metrics.sh"
 ```
-<!-- METRICS:{"schema_version":4,"run_id":"<epoch>","topic":"...","mode":"web","tier":"lite","fast":false,"subquestions":N,"scrapers":N,"scraper_errors":N,"follow_up_rounds":N,"verifier_agents":N,"claims_verified":N,"claims_confirmed":N,"claims_contradicted":N,"claims_thrown_out":N,"verify_skipped_reason":null,"links_checked":N,"links_dead":N,"renders_done":N,"sources_total":N,"corridor_violations":N,"hard_cap_hit":false,"approval_gate_action":"approved"} -->
-```
+
+The recorder appends the normalized line to `~/.claude/deep-research/metrics.jsonl` exactly as the Stop hook would. Single-quote the `printf` argument so the JSON's `"` are literal; if the topic itself contains a single quote, swap to a heredoc. (The Stop hook remains as a fallback and simply no-ops now that the comment is absent from the reply — no double-logging.)
 
 `verify_skipped_reason` is `null` when Round-1 verification ran (including runs where only escalation was dropped for speed), else one of `"fast-flag"`, `"no-verify-flag"`, `"no-central-claims"`, `"codebase-mode"`. There is no `"user-request"` full-skip value — a conversational "go faster" demotes escalation only and keeps `verify_skipped_reason: null`; a genuine zero-verify run comes from the `--fast`/`--no-verify` flag. `corridor_violations` counts sub-questions outside the **active tier's** corridor (Step 1 table).
 
@@ -285,7 +292,7 @@ Read `references/error-handling.md` for spawn failures, vague questions, and qua
 
 Before finishing, check:
 
-1. Response ends with the METRICS comment, flat schema, all keys present?
+1. Metrics recorded via the Step 8 Bash pipe (flat schema, all keys present) — and the METRICS comment is **NOT** present anywhere in the visible reply?
 2. **Chat report** is clean prose in the right order (Bottom Line → What You Need to Consider → Recommended Actions → Supporting Detail) with **no `[^N]` tags and no Sources section**?
 3. **If you saved a report:** every factual statement in the saved file carries `[^N]` or `[interpretation]`, and every `[^N]` resolves to a numbered Sources entry? (Chat output is exempt — it's intentionally citation-free.)
 4. Did Round-1 verification actually run? It MUST have, unless `verify_skipped_reason` is exactly one of `"fast-flag"`, `"no-verify-flag"`, `"no-central-claims"`, `"codebase-mode"` — all of which come from an explicit flag or a structural fact, never from a judgment call or a conversational "be quick" (that demotes escalation only, with `verify_skipped_reason: null`). If you skipped Round 1 for any other reason, STOP and run it. When it ran: every central claim has a verdict-derived confidence OR appears in the Verification section (unverified / removed / not verified (cap)).
