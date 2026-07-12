@@ -44,7 +44,14 @@ Before planning, assess whether the topic has enough context for useful research
 
 Evaluate five dimensions: **Scope** (one tool vs. whole landscape), **Purpose** (decision, learning, comparison, implementation), **Constraints** (stack, versions, region, timeframe, budget), **Depth** (overview vs. deep-dive), **Decision frame** (compare, pick, validate, survey).
 
-Trigger clarification when **two or more** dimensions are unclear, **or** the topic is under 10 words without surrounding conversation context. Ask at most **3 targeted questions** via `AskUserQuestion` (one tool call), each with 2-4 concrete options. Only ask questions that would materially change sub-questions, depth, or mode.
+Trigger clarification when **two or more** dimensions are unclear, **or** the topic is under 10 words without surrounding conversation context.
+
+**Ask by quality, not by a fixed count.** Ask ONLY questions that clear all three bars — a question that fails any bar is noise, drop it:
+1. **It would change the research** — different answers lead to different sub-questions, depth, mode, or scope. (If both answers produce the same plan, don't ask.)
+2. **It can't be inferred** — not already answered by the topic, the surrounding conversation, or a sensible default.
+3. **It's genuinely yours to decide** — intent / scope / preference, not something the research itself will surface.
+
+Let the count follow the ambiguity: a clear topic may need **0** (skip the step); a genuinely tangled, high-stakes, or broad one may warrant **up to ~5-6**. Ask them in ONE `AskUserQuestion` call (batch them), each with 2-4 concrete options. **Soft ceiling ~6 in a single round** — if more than that seem needed, ask the most decision-shifting ones first, plan from the answers, and let Phase 1.5 (approval) catch the rest rather than interrogating. Stop asking as soon as the remaining unknowns wouldn't change the plan ("ask until the questions stop mattering"), not at a fixed number.
 
 Distill answers into a `CONSTRAINTS:` block (1-2 lines max). **Keep the original topic unchanged.** The CONSTRAINTS block flows into every scraper dispatch. If the user says "just start", skip clarification, use sensible defaults, and do not re-ask.
 
