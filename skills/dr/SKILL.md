@@ -220,9 +220,46 @@ Select eligible central claims up to the tier cap (lite 5 / standard 10 / thorou
 
 Lite tier runs Round 1 (one agent) plus at most one escalation agent when a contradiction needs it — verification at lite costs 1-2 subagents total.
 
-Verifier output files: `<run-dir>/verify-r{round}-b{batch}.md`. Verifiers return `DONE|{path}`; read the verdict files afterward. Full spawn pattern, aggregation rules, and confidence mapping: read `references/verification.md` before dispatching verifiers.
+**Verifier spawn — use this exact format (inlined so you cannot skip it).** Spawn `dr-verifier` with `model: "opus"` (never sonnet — verdicts are the load-bearing step). One agent per batch of ≤10 claims; batch of exactly 1 is valid (for single-claim escalation). Launch all Round-1 batches in parallel:
 
-**Same no-fallback rule as scrapers:** if `dr-verifier` fails to spawn, never verify claims yourself and never substitute an agent type — mark affected claims `unverified` and move on (see `references/error-handling.md`).
+```
+Agent(
+  subagent_type: "deep-research:dr-verifier",
+  model: "opus",
+  prompt: "Verify the batch of claims below. Follow your agent instructions for output format and return value.
+
+QUESTION: <the original research question>
+
+CLAIM 1: <claim>
+QUOTE 1: \"<verbatim source snippet, or empty if none>\"
+SOURCE_URL 1: <url>
+SOURCE_TYPE 1: <doc|blog|forum|github|code>
+
+CLAIM 2: ...
+... (up to 10 claims) ...
+
+OUTPUT_FILE: <run-dir>/verify-r1-b1.md"
+)
+```
+
+Round-3 prompts MUST include the contradiction found earlier ("Round 1 found a counter-source: <URL> — dig deeper than the one-search baseline"). Verifier output files: `<run-dir>/verify-r{round}-b{batch}.md`. Verifiers return `DONE|{path}`; read the verdict files afterward — each holds one `### Verdict N` block per claim.
+
+**Aggregation (per claim, across the rounds it appeared in) — inlined, apply exactly:**
+- **Round 1 only** (ordinary central claim): its Round-1 verdict stands.
+- **Round 1 + Round 2** (important claim): if the two reads agree, that is the verdict; if they disagree, treat as contested and fold into Round 3.
+- **Escalated to Round 3:** the Round-3 verdict decides. Confirms → claim survives. Still `contradicted`/`uncertain` → **throw the claim out**: remove from findings, list under the saved report's Verification as "removed — unresolved contradiction" with its counter-source.
+
+**Confidence mapping (inlined) — attach to every central claim:**
+- all/most `confirmed` + primary source → `high`
+- `confirmed` with secondary source, OR survived-after-escalation → `medium`
+- `uncertain`, or single weak source → `low`
+- Findings that skipped verification (supporting/tangential claims, codebase mode) default to `medium`, no boost.
+
+Verdicts are **balanced — NO default-refute**: `confirmed` (quote supports, no credible contradiction, source strength matches), `contradicted` (credible source disputes it OR quote doesn't support it), `uncertain` (thin but no contradiction — keep at low confidence, do NOT refute just for being unsure).
+
+*(Full spawn/aggregation reference, if ever needed for edge cases: `references/verification.md` — but the above is the complete operating procedure; do not skip verification for lack of reading it.)*
+
+**Same no-fallback rule as scrapers:** if `dr-verifier` fails to spawn, never verify claims yourself and never substitute an agent type — one retry per batch, then mark affected claims `unverified` (keep at medium confidence) and move on (see `references/error-handling.md`). Verifier failures never block synthesis and never set `verify_skipped_reason` (Round 1 was still attempted).
 
 ### Step 6: Link gate (curl sweep + bounded spot-render)
 
@@ -252,11 +289,28 @@ If a gap is **material to the answer** AND you have follow-up rounds left (max 2
 
 ### Step 7: Synthesize and present
 
-Synthesize across scraper files **by theme**, not by sub-question or scraper. Present using the structure in `references/output-format.md`: **Bottom Line → What You Need to Consider → Recommended Actions → Supporting Detail.** The **chat report is clean prose — no `[^N]`, no Sources section.** Lead with the answer and what the user must weigh/do; the verification already happened internally, so write with confidence (and flag low-confidence or contradicted items in plain words, per the format file).
+Synthesize across scraper files **by theme**, not by sub-question or scraper. The **chat report is clean prose — no `[^N]`, no Sources section.** Lead with the answer; the verification already happened internally, so write with confidence.
+
+**Chat report structure (inlined — use these four sections in this order, so you cannot skip the format):**
+- **Bottom Line** — 2-4 sentences, the direct answer. No citations.
+- **What You Need to Consider** — 3-7 sharp bullets: the risks, trade-offs, caveats a thoughtful person acting on this must weigh. This is the heart of the report. Surface genuine tension in plain language ("Reporting on X is mixed — some say A, others B; treat as unsettled"). Lead a bullet with **(low confidence)** when the verifier couldn't firm it up.
+- **Recommended Actions** — 3-6 concrete, ordered, do-this-next imperatives. If purely informational, replace with a one-line "No actions required — this is informational." rather than padding.
+- **Supporting Detail** — the themed findings for the reader who wants substance, organized by theme, skimmable, still no `[^N]` in chat.
+- **Footer trust line (required)** — end with ONE small italic line: *Based on N sources; M central claims adversarially verified. Ask for sources or `--reverify` if you want the receipts.* If verification was skipped (`--fast`/`--no-verify`/codebase mode), say so honestly instead: *Fast mode — claims not independently verified.*
+
+*(Full formatting reference for edge cases: `references/output-format.md` — but the above is the complete chat structure; do not defer it.)*
 
 After presenting, ask: "Should I save the results as a report? (stored under ~/.claude/deep-research/)"
 
-If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`. **The saved file is the cited version**, not a copy of the clean chat output: take the same Bottom Line / Considerations / Recommended Actions / Supporting Detail body, re-attach `[^N]` to every factual statement (synthesis → `[interpretation]`), and append the full **Sources** section (per `references/output-format.md`). This preserves traceability and lets `--reverify` work. Slug: lowercase ASCII (ä→ae, ö→oe, ü→ue, ß→ss, drop other accents), keep `[a-z0-9]`, collapse runs of other characters to a single `-`, trim edge dashes, max 60 chars; on collision append `-2`, `-3`, … (never overwrite); prepend YAML frontmatter with `topic` (verbatim), `date`, `mode`, `tier`, `run_id` (the epoch run dir — lets `--reverify <run_id>` find this exact report later), `sources_count`, then a blank line, then the report. If the run shipped before verification finished, also add `status: VERIFICATION-INCOMPLETE — …` so a later `--reverify` (Step 0.7) can spot and upgrade it.
+If yes, write `~/.claude/deep-research/YYYY-MM-DD-<topic-slug>.md`. **The saved file is the cited version**, not a copy of the clean chat output: take the same Bottom Line / Considerations / Recommended Actions / Supporting Detail body, re-attach `[^N]` to every factual statement (synthesis → `[interpretation]`), and append the sections below. This preserves traceability and lets `--reverify` work. **A factual statement in the saved file without `[^N]` or `[interpretation]` is a bug.**
+
+**Saved-report Verification section (inlined — include when Step 5 ran; omit any empty bucket):**
+- **Removed (unresolved contradiction):** claims removed from findings, each with its counter-source.
+- **Uncertain:** claims kept with low confidence + a one-line caveat.
+- **Not verified:** central claims dropped by the claim cap, or whose verifier failed.
+- **Source unreachable:** claims whose only source failed the link gate (Step 6).
+
+**Saved-report Sources section (inlined):** numbered list where every `[^N]` in the body resolves; link-gate annotations (`[link: dead]`, `[link: content not located]`) append to the affected entry. Format: `[^1]: [doc] Title — URL` (types: doc/blog/forum/github/code). Slug: lowercase ASCII (ä→ae, ö→oe, ü→ue, ß→ss, drop other accents), keep `[a-z0-9]`, collapse runs of other characters to a single `-`, trim edge dashes, max 60 chars; on collision append `-2`, `-3`, … (never overwrite); prepend YAML frontmatter with `topic` (verbatim), `date`, `mode`, `tier`, `run_id` (the epoch run dir — lets `--reverify <run_id>` find this exact report later), `sources_count`, then a blank line, then the report. If the run shipped before verification finished, also add `status: VERIFICATION-INCOMPLETE — …` so a later `--reverify` (Step 0.7) can spot and upgrade it.
 
 ### Step 8: Metrics
 
