@@ -75,7 +75,7 @@ Tier default: `--tier` if given; else `lite`. (Optional override: if `~/.claude/
 |------|------------------|--------------|-------------------|
 | lite | 5 | 1 batch agent, +1 escalation agent only if contradictions | 25 |
 | standard | 10 | full ladder (see Step 5) | 35 |
-| thorough | 12 | full ladder | 55 |
+| thorough | 25 | full ladder — Round 1 = exactly 3 verifiers, claims split evenly | 55 |
 
 **Round-1 verification is a hard gate — not skippable by judgment.** The ONLY ways to skip Round 1 entirely are the explicit flags `--fast` or `--no-verify`, or the structural cases zero-central-claims / codebase mode. Everything else — including the user saying "be quick" or "skip the deep checking" mid-run — still runs Round 1 (one Opus `dr-verifier`, 1 subagent even at lite). A spoken "go faster" request demotes only the **escalation rounds** (Round 2/3): record `verify_skipped_reason: null` (Round 1 still ran) and simply don't escalate. "The run is taking long" or "the user seems to want speed" is NEVER a reason to drop Round 1 — at lite tier it costs exactly one extra subagent. If the user truly wants zero verification, that is the `--fast` / `--no-verify` flag, which is explicit and machine-checkable; do not infer a full skip from conversational hints.
 
@@ -135,7 +135,7 @@ Dispatch budget: N scrapers + ~M verifiers (sweet spot ~12 scrapers, ceiling ~15
 
 For `mode: knowledge`, plan exactly one synthetic sub-question: verification of the top-3 claims you intend to make, with 2 web scrapers.
 
-**Hard subagent cap check.** Planned total = scrapers + `ceil(verify_claim_cap / 10) + 2`. If it exceeds the tier cap, trim verify claims first (drop lowest centrality), then scrapers. Record `hard_cap_hit: true` if trimmed.
+**Hard subagent cap check.** Planned total = scrapers + Round-1 verifiers + 2 escalation. Round-1 verifiers = **3 at thorough** (fixed), else `ceil(verify_claim_cap / 10)`. So thorough ≈ scrapers + 5. If it exceeds the tier cap, trim verify claims first (drop lowest centrality), then scrapers. Record `hard_cap_hit: true` if trimmed.
 
 ### Step 1.5: Approval gate
 
@@ -216,18 +216,20 @@ Only `central` claims enter Step 5; `supporting`/`tangential` flow unverified in
 
 ### Step 5: Verify central claims (batched escalation ladder)
 
-Select eligible central claims up to the tier cap (lite 5 / standard 10 / thorough 12); list any dropped by the cap under the report's Verification section as "not verified (cap)".
+Select eligible central claims up to the tier cap (lite 5 / standard 10 / thorough 25); list any dropped by the cap under the report's Verification section as "not verified (cap)".
 
-**Never spawn one verifier per claim.** One `dr-verifier` handles a batch of up to ~10 claims, so the whole stage is a handful of agents. The ladder:
+**Never spawn one verifier per claim.** One `dr-verifier` handles a batch of claims, so the whole stage is a handful of agents. The ladder:
 
-1. **Round 1 (always):** batch claims in groups of ≤10, ONE `dr-verifier` per batch, all batches in parallel.
+1. **Round 1 (always):**
+   - **thorough tier: spawn EXACTLY 3 `dr-verifier` agents, splitting the eligible claims as evenly as possible across them** (e.g. 25 → 9/8/8, 20 → 7/7/6, 12 → 4/4/4). Never fewer than 3 at thorough even if it means small batches; never more than 3 in Round 1. All 3 in parallel.
+   - **lite / standard tiers:** batch claims in groups of ≤10, ONE `dr-verifier` per batch, all batches in parallel (so lite/standard = 1-2 Round-1 agents).
 2. **Round 2 (standard/thorough only):** one fresh verifier re-reads the *important* claims (top decision-drivers) as a single batch.
 3. **Round 3:** one fresh verifier re-checks claims that came back `contradicted` AND materially affect the answer, with each contradiction noted in its prompt. Skip if none.
 4. **Resolve or throw out:** an escalated claim that still cannot be resolved is **removed** from the findings and listed under Verification as "removed — unresolved contradiction" with its counter-source.
 
 Lite tier runs Round 1 (one agent) plus at most one escalation agent when a contradiction needs it — verification at lite costs 1-2 subagents total.
 
-**Verifier spawn — use this exact format (inlined so you cannot skip it).** Spawn `dr-verifier` with `model: "opus"` (never sonnet — verdicts are the load-bearing step). One agent per batch of ≤10 claims; batch of exactly 1 is valid (for single-claim escalation). Launch all Round-1 batches in parallel:
+**Verifier spawn — use this exact format (inlined so you cannot skip it).** Spawn `dr-verifier` with `model: "opus"` (never sonnet — verdicts are the load-bearing step). Batch size per the Round-1 rule above (**thorough = exactly 3 agents, claims split evenly**; lite/standard = ≤10 per batch). A batch of exactly 1 is valid (for single-claim escalation). Launch all Round-1 batches in parallel:
 
 ```
 Agent(

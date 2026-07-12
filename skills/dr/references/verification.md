@@ -55,7 +55,7 @@ Findings that skipped verification (supporting/tangential claims, codebase mode)
 
 ## Hard cap interaction
 
-Verifier agents ≈ `ceil(claims / 10)` for Round 1, plus at most 2 escalation agents. If the planned total of scrapers + verifiers exceeds the tier's hard subagent cap, reduce the claim count first (drop lowest-centrality claims), never the batching or escalation logic.
+Round-1 verifier agents = **exactly 3 at thorough tier** (claims split evenly across them), else `ceil(claims / 10)` (lite/standard), plus at most 2 escalation agents. If the planned total of scrapers + verifiers exceeds the tier's hard subagent cap, reduce the claim count first (drop lowest-centrality claims), never the batching or escalation logic.
 
 ## Failure rule
 
