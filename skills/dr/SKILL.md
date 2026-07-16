@@ -1,6 +1,5 @@
 ---
 name: dr
-disable-model-invocation: true
 description: |
   Deep research orchestrator: fan-out scrapers, batched adversarial verification, link-checked cited report.
   Use when the user explicitly asks for deep research ("/dr", "deep research", "decision-grade report",
