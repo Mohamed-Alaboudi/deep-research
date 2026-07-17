@@ -1,0 +1,6 @@
+interface:
+  display_name: "Deep Research"
+  short_description: "Verified, cited multi-agent research"
+  default_prompt: "Run $dr on this decision-grade research question."
+policy:
+  allow_implicit_invocation: true

@@ -1,8 +1,8 @@
-# Deep Research for Claude Code (`/dr` + `/spinner`)
+# Deep Research for Claude Code and Codex
 
-A self-installing [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin with two commands:
+A dual-runtime research plugin:
 
-- **`/dr`** — **deep, multi-source, fact-checked research**: it fans out scraper agents, has an Opus agent adversarially try to *refute* every central claim, link-checks the sources, and hands you a cited report.
+- **Claude `/dr` / Codex `$dr`** — **deep, multi-source, fact-checked research**: it fans out source-grounded scrapers, has a fresh high-capability verifier adversarially check every central claim, link-checks sources, and returns a cited report.
 - **`/spinner`** — an **uncorrelated second opinion** on any decision: it spawns a fresh Opus sub-agent that knows only the decision (not your reasoning), reads the code itself, finds what you'd have missed, and commits to the best option. No API key needed.
 
 Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research), extended with `/spinner`.
@@ -25,6 +25,8 @@ Claude will read [`CLAUDE.md`](./CLAUDE.md), install the plugin, and interview y
 
 ## Manual setup (if you'd rather)
 
+Claude Code:
+
 ```bash
 # 1. Install the plugin (from GitHub)
 claude plugin marketplace add Mohamed-Alaboudi/deep-research
@@ -43,6 +45,18 @@ claude mcp add-json exa -s user '{
 
 > **The Exa key must be a header.** The hosted Exa MCP ignores an `env` key and rate-limits (429) keyless. This trips everyone up once.
 
+Codex:
+
+```bash
+codex plugin marketplace add https://github.com/Mohamed-Alaboudi/deep-research.git
+codex plugin add deep-research@cortex-dr
+
+# Then invoke:
+# $dr --tier lite "latest Node.js LTS version and release date"
+```
+
+Codex uses `.codex-plugin/plugin.json` plus `codex/skills/dr/`. It prefers Exa when configured and falls back to native web search on quota errors. Reports save under `~/.codex/deep-research/`.
+
 ## Using it
 
 ```bash
@@ -58,7 +72,7 @@ claude mcp add-json exa -s user '{
 /spinner                                                   # uses options laid out earlier in the chat
 ```
 
-`/dr` reports save to `~/.claude/deep-research/`; per-run metrics append to `~/.claude/deep-research/metrics.jsonl`. `/spinner` returns a Decision + missed edge cases + runner-up + confidence — it never auto-executes.
+Claude `/dr` reports save to `~/.claude/deep-research/`; Codex `$dr` reports save to `~/.codex/deep-research/`. `/spinner` returns a Decision + missed edge cases + runner-up + confidence — it never auto-executes.
 
 ## What makes it trustworthy
 

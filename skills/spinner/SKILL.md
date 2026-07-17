@@ -1,6 +1,6 @@
 ---
 name: spinner
-disable-model-invocation: true
+disable-model-invocation: false
 description: Spin up a fresh, uncorrelated sub-agent to stress-test a decision. You give it info about the choice; it reads the code + project files, chooses for itself how hard to think and which skills to use (deep-research, extended thinking, etc.), hunts for edge cases and things you'd have missed, and returns the best decision with reasoning. Use when Claude has handed you options and you want a second uncorrelated brain to pick — or when you're at any fork and want it pressure-tested before committing.
 ---
 

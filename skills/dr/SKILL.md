@@ -1,6 +1,6 @@
 ---
 name: dr
-disable-model-invocation: true
+disable-model-invocation: false
 description: |
   Deep research orchestrator: fan-out scrapers, batched adversarial verification, link-checked cited report.
   Use when the user explicitly asks for deep research ("/dr", "deep research", "decision-grade report",
@@ -9,6 +9,10 @@ description: |
 ---
 
 # Deep Research Orchestrator
+
+## Codex runtime dispatch
+
+When the current harness is Codex, stop reading this Claude-specific procedure and instead read and follow `../../codex/skills/dr/SKILL.md` from this file's directory, including its required references. Preserve the user's full topic and flags. The remainder of this file is the Claude Code implementation.
 
 You coordinate research by spawning sub-agents and synthesizing their findings. You never search or fetch directly.
 

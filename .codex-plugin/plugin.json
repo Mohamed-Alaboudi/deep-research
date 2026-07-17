@@ -1,0 +1,26 @@
+{
+  "name": "deep-research",
+  "version": "3.7.0-cortex",
+  "description": "Codex-native deep research with bounded scraper fan-out, adversarial verification, link checking, and cited durable reports.",
+  "author": {
+    "name": "Mohamed Alaboudi",
+    "url": "https://github.com/Mohamed-Alaboudi"
+  },
+  "repository": "https://github.com/Mohamed-Alaboudi/deep-research",
+  "license": "MIT",
+  "keywords": ["research", "agents", "verification", "citations"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Cortex Deep Research",
+    "shortDescription": "Verified multi-agent research",
+    "longDescription": "Plan, fan out source-grounded research, adversarially verify central claims, check links, and produce a cited decision-grade report.",
+    "developerName": "Mohamed Alaboudi",
+    "category": "Productivity",
+    "capabilities": ["Research", "Verification", "Citations"],
+    "websiteURL": "https://github.com/Mohamed-Alaboudi/deep-research",
+    "defaultPrompt": [
+      "Run deep research on this decision.",
+      "Verify these claims and produce a cited report."
+    ]
+  }
+}

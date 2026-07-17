@@ -1,6 +1,6 @@
 # Deep Research (cortex-dr fork)
 
-A modular [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin for deep research across web, codebase, and knowledge domains. Scrapers run on Sonnet; the verifier runs on Opus (subtle claim-checking is the one place the extra capability pays for itself); the orchestrator runs on the session model.
+A dual-runtime Claude Code and Codex plugin for deep research across web, codebase, knowledge, and mixed domains. Claude routes bounded scrapers to Sonnet and verification to Opus. Codex routes bounded scrapers to Terra and verification to Sol when the active surface supports custom-agent model selection; the root research head owns planning and synthesis.
 
 Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research). Tracks upstream; diverges with Exa-first scrapers, a batch verifier, a mandatory verification stage, and a curl link gate.
 
@@ -21,6 +21,11 @@ Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research). 
 ```bash
 claude plugin marketplace add Mohamed-Alaboudi/deep-research
 claude plugin install deep-research@cortex-dr
+```
+
+```bash
+codex plugin marketplace add https://github.com/Mohamed-Alaboudi/deep-research.git
+codex plugin add deep-research@cortex-dr
 ```
 
 Manual (development): `claude --plugin-dir /path/to/deep-research`
@@ -82,6 +87,11 @@ Flat dispatch (orchestrator → sub-agents, one hop). Agent `.md` files carry fr
 
 ```
 deep-research/
+  .codex-plugin/
+    plugin.json                  # Codex plugin manifest
+  codex/skills/dr/
+    SKILL.md                     # Codex-native orchestrator
+    references/                 # Web, codebase, and verifier contracts
   .claude-plugin/
     plugin.json                  # Plugin manifest
     marketplace.json             # cortex-dr marketplace entry
