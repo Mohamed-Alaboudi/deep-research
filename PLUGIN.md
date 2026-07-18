@@ -1,6 +1,6 @@
 # Deep Research (cortex-dr fork)
 
-A dual-runtime Claude Code and Codex plugin for deep research across web, codebase, knowledge, and mixed domains. Claude routes bounded scrapers to Sonnet and verification to Opus. Codex routes bounded scrapers to Terra and verification to Sol when the active surface supports custom-agent model selection; the root research head owns planning and synthesis.
+A dual-runtime Claude Code and Codex plugin for deep research across web, codebase, knowledge, and mixed domains. Claude routes bounded scrapers to Sonnet and verification to Opus. Codex routes first-pass collectors to Terra/low, upgrades only difficult collection to Terra/medium, uses Terra/high for routine verification, and reserves Sol/high for thorough, high-stakes, or contested claims when the active surface supports model selection; the root research head owns planning and synthesis.
 
 Cortex fork of [phyr97/deep-research](https://github.com/phyr97/deep-research). Tracks upstream; diverges with Exa-first scrapers, a batch verifier, a mandatory verification stage, and a curl link gate.
 

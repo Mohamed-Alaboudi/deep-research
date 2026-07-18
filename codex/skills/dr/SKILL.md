@@ -7,6 +7,8 @@ description: "Run the user's decision-grade deep-research workflow: plan and app
 
 You are the research head. You plan, dispatch, inspect evidence, select central claims, integrate verdicts, and synthesize. Subagents collect or verify evidence; they do not make the final decision.
 
+Use a moderate-capability head for planning, ledgering, link checks, and ordinary synthesis. Do not upgrade the head merely because the tier is `thorough`; reserve stronger reasoning for reconciling material verifier conflicts or genuinely difficult cross-domain conclusions.
+
 Read these references before dispatching:
 
 - `references/scraper-web.md` for every web scraper packet.
@@ -69,7 +71,15 @@ Present topic, mode, tier, numbered subquestions, depth, angles, scraper count, 
 
 Create `/tmp/deep-research/<epoch>/`; the epoch is `run_id`. Output names are `sq<N>-web-<M>.md`, `sq<N>-codebase-<M>.md`, and `verify-r<R>-b<B>.md`.
 
-Spawn all independent scraper packets in parallel when slots allow. Each packet must include the exact applicable reference path, original question, one neutral angle, depth, constraints, and its one allowed output file. Route cheap bounded collection to a Terra/medium worker when the surface supports model selection. If it does not, keep the packet bounded and record that model routing was unavailable.
+Spawn all independent scraper packets in parallel when slots allow. Each packet must include the exact applicable reference path, original question, one neutral angle, depth, constraints, and its one allowed output file.
+
+Use the cheapest capable routing available:
+
+- every first-pass shallow, standard, or deep web collector, plus bounded codebase location: `gpt-5.6-terra` with low reasoning and a fresh/minimal context;
+- only a targeted retry after the low-cost pass fails the corpus audit, including unresolved multi-file call-path tracing: `gpt-5.6-terra` with medium reasoning;
+- never use Sol for collection.
+
+When explicit model/effort selection is unavailable, use the lowest-cost collector role exposed by the surface, keep the packet bounded, and record the routing limitation. Upgrade an individual collector only after its low-cost pass fails the corpus audit.
 
 ## 3. Audit the corpus
 
@@ -94,9 +104,9 @@ Deduplicate equivalent claims. Only external, central, URL-backed claims enter a
 
 ## 5. Verify
 
-Unless a valid skip applies, batch up to ten claims per verifier. Each packet includes `references/verifier.md`, the original question, numbered claims, quotes, source URLs/types, and one output file. Use a fresh Sol/high verifier when model routing is available.
+Unless a valid skip applies, batch up to ten claims per verifier. Each packet includes `references/verifier.md`, the original question, numbered claims, quotes, source URLs/types, and one output file. Use a fresh `gpt-5.6-terra` high-reasoning verifier for lite and standard. Use `gpt-5.6-sol` high only for thorough, high-stakes decisions, or escalation of a materially contradicted claim; never use maximum/ultra reasoning for routine verification.
 
-Round 1 checks every selected central claim. Thorough uses exactly three evenly split Round-1 batches. Escalate only contradicted claims or material disagreements to a fresh single-claim verifier, at most two escalation rounds. Aggregate:
+Round 1 checks every selected central claim. Thorough uses exactly three evenly split Round-1 batches. Escalate only contradicted claims or material disagreements to a fresh single-claim Sol verifier, at most two escalation rounds. Aggregate:
 
 - confirmed/high → state confidently;
 - confirmed/medium or uncertain → qualify and lower confidence;
